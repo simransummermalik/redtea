@@ -14,7 +14,7 @@ describe("WebSocket protocol schemas", () => {
     expect(
       serverMessageSchema.safeParse({
         type: "hello",
-        version: 1,
+        version: 2,
         clientSentAt: 10,
         serverReceivedAt: 11,
       }).success,
@@ -22,10 +22,32 @@ describe("WebSocket protocol schemas", () => {
     expect(
       serverMessageSchema.safeParse({
         type: "snapshot",
-        room: { code: "abcde", phase: "lobby", hostId: "p1", mode: "green", botCount: 0 },
+        room: {
+          code: "abcde",
+          phase: "lobby",
+          hostId: "p1",
+          mode: "green",
+          botCount: 0,
+          countdownEndsAt: null,
+        },
         players: [],
         game: null,
       }).success,
     ).toBe(false);
+    expect(
+      serverMessageSchema.safeParse({
+        type: "snapshot",
+        room: {
+          code: "ABCDE",
+          phase: "countdown",
+          hostId: "p1",
+          mode: "green",
+          botCount: 0,
+          countdownEndsAt: 20,
+        },
+        players: [],
+        game: null,
+      }).success,
+    ).toBe(true);
   });
 });
