@@ -21,7 +21,6 @@
       "name": "@redtea/web",
       "dependencies": {
         "@redtea/engine": "workspace:*",
-        "@redtea/words": "workspace:*",
         "solid-js": "^1.9.18",
       },
       "devDependencies": {

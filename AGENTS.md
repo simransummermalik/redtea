@@ -26,6 +26,7 @@ Keep dependencies minimal and document why each new dependency is needed.
 - `bun install` installs all workspace dependencies.
 - `bun test` runs the test suite.
 - `bun run dev:web` starts the Vite development server via `bunx --bun vite`.
+- `bun run build:web` builds the browser app.
 - `bun run typecheck` checks every workspace with strict TypeScript.
 - `bun run lint` and `bun run format` run Biome.
 - `bun run words:build` downloads/processes the source word list and generates game data.

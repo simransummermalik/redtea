@@ -9,6 +9,7 @@
   "scripts": {
     "test": "bun test",
     "dev:web": "bun --filter @redtea/web dev",
+    "build:web": "bun --filter @redtea/web build",
     "typecheck": "bun --filter '*' typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",
