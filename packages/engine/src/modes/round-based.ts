@@ -1,6 +1,6 @@
 import { nextRandom, randomIndex } from "../random";
-import type { GamePlayer, WordCatalog } from "./black";
 import type { ModeStrategy, PlayerId } from "../types";
+import type { GamePlayer, WordCatalog } from "./black";
 
 export type RoundModeName = "green" | "red" | "yellow";
 
@@ -181,8 +181,8 @@ function validateConfig(config: RoundModeConfig): void {
   if (!Number.isFinite(config.roundTimeMs) || config.roundTimeMs <= 0) {
     throw new RangeError("Round time must be positive");
   }
-  if (!Number.isInteger(config.botCount) || config.botCount < 1 || config.botCount > 3) {
-    throw new RangeError("Bot count must be between 1 and 3");
+  if (!Number.isInteger(config.botCount) || config.botCount < 0 || config.botCount > 3) {
+    throw new RangeError("Bot count must be between 0 and 3");
   }
   if (config.botFastestThinkMs < 0 || config.botSlowestThinkMs < config.botFastestThinkMs) {
     throw new RangeError("Bot think-time bounds are invalid");
