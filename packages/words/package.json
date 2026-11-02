@@ -1,0 +1,10 @@
+{
+  "name": "@redtea/words",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "typecheck": "tsc --project tsconfig.json"
+  }
+}

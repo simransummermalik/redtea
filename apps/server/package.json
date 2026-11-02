@@ -1,0 +1,11 @@
+{
+  "name": "@redtea/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@redtea/protocol": "workspace:*"
+  }
+}
