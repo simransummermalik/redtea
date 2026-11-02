@@ -98,6 +98,18 @@ describe("Black Tea engine", () => {
     expect(result.fragment).not.toBe(state.fragment);
   });
 
+  test("can keep the same fragment when configured", () => {
+    const state = start(makeState({ config: { changeFragmentEachTurn: false } }));
+    const result = step(
+      state,
+      { type: "SUBMIT_WORD", playerId: "human", word: answerFor(state) },
+      2_000,
+    ).state;
+
+    expect(result.currentPlayerId).toBe("bot");
+    expect(result.fragment).toBe(state.fragment);
+  });
+
   test("does not accept a submission at or after its deadline", () => {
     const state = start();
     const late = step(

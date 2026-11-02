@@ -23,6 +23,7 @@ export interface BlackConfig {
   initialTurnMs: number;
   timerDecreasePerTurnMs: number;
   minimumTurnMs: number;
+  changeFragmentEachTurn: boolean;
   pointsPerWord: number;
   minimumFragmentSolutions: number;
   botFastestThinkMs: number;
@@ -34,6 +35,7 @@ export const defaultBlackConfig: BlackConfig = {
   initialTurnMs: 12_000,
   timerDecreasePerTurnMs: 500,
   minimumTurnMs: 5_000,
+  changeFragmentEachTurn: true,
   pointsPerWord: 1,
   minimumFragmentSolutions: 5,
   botFastestThinkMs: 900,
@@ -203,11 +205,21 @@ function availableWords(state: BlackGameState, fragment: string): readonly strin
   return (state.catalog.wordsByFragment[fragment] ?? []).filter((word) => !used.has(word));
 }
 
-function chooseFragment(state: BlackGameState): { fragment: string | null; rngState: number } {
+function chooseFragment(
+  state: BlackGameState,
+  avoidCurrent: boolean,
+): { fragment: string | null; rngState: number } {
+  if (
+    !avoidCurrent &&
+    state.fragment !== null &&
+    availableWords(state, state.fragment).length > 0
+  ) {
+    return { fragment: state.fragment, rngState: state.rngState };
+  }
   let available = state.catalog.fragments.filter(
     (fragment) => availableWords(state, fragment).length > 0,
   );
-  if (available.length > 1 && state.fragment !== null) {
+  if (avoidCurrent && available.length > 1 && state.fragment !== null) {
     available = available.filter((fragment) => fragment !== state.fragment);
   }
   if (available.length === 0) return { fragment: null, rngState: state.rngState };
@@ -249,7 +261,7 @@ function beginTurn(
   durationMs: number,
   effects: BlackEffect[],
 ): BlackGameState {
-  const chosen = chooseFragment(state);
+  const chosen = chooseFragment(state, state.turnNumber > 0 && state.config.changeFragmentEachTurn);
   if (chosen.fragment === null) return finishGame({ ...state, rngState: chosen.rngState });
   const next = {
     ...state,
