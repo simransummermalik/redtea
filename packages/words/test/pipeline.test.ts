@@ -1,0 +1,41 @@
+import { describe, expect, test } from "bun:test";
+import { processWordLists } from "../src/pipeline";
+
+describe("processWordLists", () => {
+  test("removes inflections only when a stem is present and preserves edge cases", () => {
+    const result = processWordLists(
+      ["bus", "buses", "sing", "singing", "new", "news", "series", "dog", "dogs"],
+      ["Alice", "London"],
+      1,
+    );
+
+    expect(result.words).toEqual(["bus", "dog", "new", "news", "series", "sing"]);
+    expect(result.report.pluralsExcluded).toBe(2);
+    expect(result.report.ingFormsExcluded).toBe(1);
+    expect(result.report.properNameEntriesExcluded).toBe(2);
+    expect(result.report.samples.bus?.included).toBe(true);
+    expect(result.report.samples.sing?.included).toBe(true);
+    expect(result.report.samples.news?.included).toBe(true);
+    expect(result.report.samples.series?.included).toBe(true);
+  });
+
+  test("normalizes case, drops non-alpha entries, deduplicates, and indexes each word once", () => {
+    const result = processWordLists(["Tea", "tea", "t-ea", "teas"], [], 1);
+
+    expect(result.words).toEqual(["tea"]);
+    expect(result.report.duplicateEntries).toBe(1);
+    expect(result.report.nonAlphaEntriesExcluded).toBe(1);
+    expect(result.fragments).toEqual([{ fragment: "tea", solutionCount: 1, difficulty: "hard" }]);
+  });
+
+  test("applies the minimum fragment count and solution-count difficulty tiers", () => {
+    const words = Array.from({ length: 25 }, (_, index) => {
+      return `abc${String.fromCharCode(97 + index)}x`;
+    });
+    const result = processWordLists(words, [], 5);
+
+    expect(result.fragments.find(({ fragment }) => fragment === "abc")?.solutionCount).toBe(25);
+    expect(result.report.fragmentsByDifficulty.medium).toBeGreaterThan(0);
+    expect(result.report.fragmentsBelowMinimum).toBeGreaterThan(0);
+  });
+});

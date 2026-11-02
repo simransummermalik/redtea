@@ -1,0 +1,41 @@
+{
+  "sourceEntries": 101368,
+  "duplicateEntries": 0,
+  "properNameEntriesExcluded": 20246,
+  "nonAlphaEntriesExcluded": 24265,
+  "pluralsExcluded": 20666,
+  "ingFormsExcluded": 6948,
+  "finalWords": 49489,
+  "fragmentsBelowMinimum": 1959,
+  "fragmentsByDifficulty": {
+    "easy": 837,
+    "medium": 1330,
+    "hard": 1807
+  },
+  "samples": {
+    "bus": {
+      "included": true,
+      "reason": "retained as a base word"
+    },
+    "sing": {
+      "included": true,
+      "reason": "retained as a base word"
+    },
+    "news": {
+      "included": true,
+      "reason": "retained as a base word"
+    },
+    "series": {
+      "included": true,
+      "reason": "retained as a base word"
+    },
+    "buses": {
+      "included": false,
+      "reason": "excluded because a singular stem is present"
+    },
+    "singing": {
+      "included": false,
+      "reason": "excluded because its verb stem is present"
+    }
+  }
+}
