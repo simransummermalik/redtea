@@ -1,7 +1,9 @@
 import {
   type AnyRoundGameState,
   type BlackGameState,
+  type MixGameState,
   createBlackGame,
+  createMixGame,
   createGreenGame,
   createRedGame,
   createWordCatalog,
@@ -12,6 +14,7 @@ import {
   step,
   stepRoundGame,
   type WordCatalog,
+  stepMix,
 } from "@redtea/engine";
 import {
   type ClientMessage,
@@ -67,8 +70,8 @@ interface RoomPlayer {
   graceTimer: ReturnType<typeof setTimeout> | null;
 }
 
-type Mode = "black" | RoundModeName;
-type EngineState = BlackGameState | AnyRoundGameState;
+type Mode = "black" | "mix" | RoundModeName;
+type EngineState = BlackGameState | AnyRoundGameState | MixGameState;
 
 interface Room {
   code: string;
@@ -684,18 +687,27 @@ export class RoomService {
           seed,
           config: { ...room.config, botCount: room.botCount },
         });
-      else
+      else if (room.mode === "yellow")
         room.game = createYellowGame({
           players,
           catalog: this.options.catalog,
           seed,
           config: { ...room.config, botCount: room.botCount },
         });
+      else
+        room.game = createMixGame({
+          players,
+          catalog: this.options.catalog,
+          seed,
+          config: room.config,
+        });
       const now = this.clock.now();
       room.game =
         room.game.mode === "black"
           ? step(room.game, { type: "START" }, now).state
-          : stepRoundGame(room.game, { type: "START" }, now).state;
+          : room.game.mode === "mix"
+            ? stepMix(room.game, { type: "START" }, now).state
+            : stepRoundGame(room.game, { type: "START" }, now).state;
       room.phase = "playing";
       room.lastActivityAt = this.clock.now();
       this.schedule(room);
@@ -731,6 +743,14 @@ export class RoomService {
           { type: "SUBMIT_WORD", playerId, word: message.word },
           now,
         ).state;
+      } else if (room.game.mode === "mix") {
+        room.game = stepMix(
+          room.game,
+          message.type === "submit_message"
+            ? { type: "SUBMIT_MESSAGE", playerId, message: message.message }
+            : { type: "SUBMIT_WORD", playerId, word: message.word },
+          now,
+        ).state;
       } else {
         if (message.type === "submit_message" && room.game.mode === "yellow") {
           room.game = stepRoundGame(
@@ -758,11 +778,24 @@ export class RoomService {
   private schedule(room: Room): void {
     if (room.timer) this.clock.clearTimeout(room.timer);
     room.timer = null;
-    if (room.game?.status !== "playing") return;
+    if (
+      room.game?.status !== "playing" &&
+      !(room.game?.mode === "mix" && room.game.status === "intermission")
+    )
+      return;
     const deadlines =
       room.game.mode === "black"
         ? [room.game.turnEndsAt, room.game.botAction?.dueAt]
-        : [room.game.roundEndsAt, ...room.game.botActions.map(({ dueAt }) => dueAt)];
+        : room.game.mode === "mix"
+          ? room.game.status === "intermission"
+            ? [room.game.intermissionEndsAt]
+            : room.game.activeGame?.mode === "black"
+              ? [room.game.activeGame.turnEndsAt, room.game.activeGame.botAction?.dueAt]
+              : [
+                  room.game.activeGame?.roundEndsAt,
+                  ...(room.game.activeGame?.botActions.map(({ dueAt }) => dueAt) ?? []),
+                ]
+          : [room.game.roundEndsAt, ...room.game.botActions.map(({ dueAt }) => dueAt)];
     const next = deadlines
       .filter((value): value is number => value !== null && value !== undefined)
       .reduce((min, value) => Math.min(min, value), Number.POSITIVE_INFINITY);
@@ -776,7 +809,9 @@ export class RoomService {
           room.game =
             room.game.mode === "black"
               ? step(room.game, { type: "TICK" }, now).state
-              : stepRoundGame(room.game, { type: "TICK" }, now).state;
+              : room.game.mode === "mix"
+                ? stepMix(room.game, { type: "TICK" }, now).state
+                : stepRoundGame(room.game, { type: "TICK" }, now).state;
           if (room.game.status === "finished") room.phase = "finished";
           room.lastActivityAt = now;
           this.scheduleIdleCleanup(room);
@@ -796,6 +831,46 @@ export class RoomService {
     if (game.mode === "black") {
       const { catalog: _catalog, rngState: _rng, botAction: _bot, ...visible } = game;
       return visible;
+    }
+    if (game.mode === "mix") {
+      const { catalog: _catalog, rngState: _rng, activeGame, ...visible } = game;
+      let publicActive: unknown = activeGame;
+      if (activeGame?.mode === "black") {
+        const {
+          catalog: _childCatalog,
+          rngState: _childRng,
+          botAction: _bot,
+          ...child
+        } = activeGame;
+        publicActive = child;
+      } else if (activeGame) {
+        const {
+          catalog: _childCatalog,
+          rngState: _childRng,
+          botActions: _bots,
+          ...child
+        } = activeGame;
+        publicActive = child;
+        if (activeGame.mode === "yellow" && activeGame.status === "playing") {
+          publicActive = {
+            ...child,
+            roundSubmissions: activeGame.roundSubmissions.map((submission) => ({
+              ...submission,
+              text: "",
+              validWords: [],
+              invalidWords: [],
+              score: 0,
+            })),
+          };
+        }
+      }
+      return {
+        ...visible,
+        ...(game.currentTea === "yellow" && game.status === "playing"
+          ? { players: game.players.map((player) => ({ ...player, points: 0 })) }
+          : {}),
+        activeGame: publicActive,
+      };
     }
     const { catalog: _catalog, rngState: _rng, botActions: _bots, ...visible } = game;
     if (game.mode === "yellow" && game.status === "playing") {

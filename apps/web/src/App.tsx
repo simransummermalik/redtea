@@ -1,6 +1,8 @@
 import type {
   BlackPlayerState,
   GamePlayer,
+  MixConfig,
+  MixTea,
   RoundModeEffect,
   RoundResult,
   RoundSubmission,
@@ -10,8 +12,10 @@ import {
   defaultGreenConfig,
   defaultRedConfig,
   defaultYellowConfig,
+  defaultMixConfig,
   getRoundTimeRemainingMs,
   getTimeRemainingMs,
+  mixTimeRemainingMs,
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
@@ -34,6 +38,7 @@ type UiModeConfig = {
   roundTimeMs: number;
   allowWordReuse: boolean;
   ignoreInvalidWords: boolean;
+  mixConfig?: MixConfig;
 };
 type SubmissionFeedItem = {
   id: number;
@@ -46,6 +51,13 @@ type SubmissionFeedItem = {
 };
 
 const teaModes: { id: TeaMode; label: string; title: string; desc: string; glyph: string }[] = [
+  {
+    id: "mix",
+    label: "Mix",
+    title: "Let the kettle decide",
+    desc: "A different tea challenge can arrive each round.",
+    glyph: "✳",
+  },
   {
     id: "black",
     label: "Black",
@@ -122,17 +134,28 @@ function initialUiConfigs(): Record<TeaMode, UiModeConfig> {
       allowWordReuse: defaultYellowConfig.allowWordReuse,
       ignoreInvalidWords: defaultYellowConfig.ignoreInvalidWords,
     },
+    mix: {
+      botCount: 2,
+      botSkill: 0.65,
+      pointsToWin: defaultMixConfig.pointsToWin,
+      roundTimeMs: defaultMixConfig.roundTimeMs,
+      allowWordReuse: false,
+      ignoreInvalidWords: defaultMixConfig.ignoreInvalidWords,
+      mixConfig: { ...defaultMixConfig },
+    },
   };
 }
 
 function roundResult(state: AnyGameState | null): RoundResult | null {
   if (!state) return null;
   if (state.mode === "black") return state.lastRoundResult as RoundResult | null;
+  if (state.mode === "mix") return null;
   return state.roundResults.at(-1) ?? null;
 }
 
 function roundNumber(state: AnyGameState | null): number {
   if (!state) return 0;
+  if (state.mode === "mix") return state.roundNumber;
   return state.mode === "black" ? state.turnNumber : state.roundNumber;
 }
 
@@ -256,6 +279,27 @@ export function App() {
     );
   }
 
+  function changeMixSetting<K extends keyof MixConfig>(key: K, value: MixConfig[K]): void {
+    const current = configs().mix;
+    const settings = {
+      ...current,
+      mixConfig: { ...(current.mixConfig ?? defaultMixConfig), [key]: value },
+    };
+    setConfigs((all) => ({ ...all, mix: settings }));
+    connection().configureRoom("mix", selectedEngineConfig("mix", settings), settings.botCount);
+  }
+
+  function mixTeaCannotBeDisabled(tea: MixTea): boolean {
+    const selected = configs().mix.mixConfig ?? defaultMixConfig;
+    return (
+      selected[`${tea}Enabled` as keyof MixConfig] === true &&
+      !(["black", "green", "red", "yellow"] as const).some(
+        (candidate) =>
+          candidate !== tea && selected[`${candidate}Enabled` as keyof MixConfig] === true,
+      )
+    );
+  }
+
   function leaveRoom(): void {
     connection().close();
     const local = new LocalConnection();
@@ -279,6 +323,7 @@ export function App() {
     settings: UiModeConfig,
   ): Record<string, number | boolean> {
     if (selected === "black") return { initialTurnMs: settings.roundTimeMs };
+    if (selected === "mix") return { ...(settings.mixConfig ?? defaultMixConfig) };
     const shared = {
       botCount: settings.botCount,
       pointsToWin: settings.pointsToWin,
@@ -298,6 +343,15 @@ export function App() {
     if (!catalog) return;
     const selected = mode();
     const settings = configs()[selected];
+    if (
+      selected === "mix" &&
+      !["black", "green", "red", "yellow"].some(
+        (tea) => settings.mixConfig?.[`${tea}Enabled` as keyof MixConfig],
+      )
+    ) {
+      setLobbyError("Keep at least one tea enabled to start Mix.");
+      return;
+    }
     const players = makePlayers(settings.botCount, settings.botSkill);
     const seed = crypto.getRandomValues(new Uint32Array(1))[0] ?? 1;
     connection().start({
@@ -323,8 +377,10 @@ export function App() {
       return;
     }
     setEntry("");
-    if (current.mode !== "black" || current.currentPlayerId === connection().playerId())
-      connection().submit(current.mode, text);
+    const selectedMode = current.mode === "mix" ? (current.currentTea ?? "green") : current.mode;
+    const active = activeGame();
+    if (active?.mode !== "black" || active.currentPlayerId === connection().playerId())
+      connection().submit(selectedMode, text);
     requestAnimationFrame(() => inputRef?.focus());
   }
 
@@ -386,21 +442,28 @@ export function App() {
   const remainingMs = () => {
     const current = game();
     if (!current) return 0;
+    if (current.mode === "mix") return mixTimeRemainingMs(current, clock());
     return current.mode === "black"
       ? getTimeRemainingMs(current, clock())
       : getRoundTimeRemainingMs(current, clock());
   };
   const roundDuration = () => {
     const current = game();
+    if (current?.mode === "mix" && current.status === "intermission")
+      return current.config.intermissionMs;
+    if (current?.mode === "mix")
+      return current.currentTea
+        ? current.config[`${current.currentTea}TimeMs`] || current.config.roundTimeMs
+        : 0;
     return current?.mode === "black" ? current.turnDurationMs : (current?.config.roundTimeMs ?? 0);
   };
   const currentPlayer = () => {
-    const current = game();
+    const current = activeGame();
     if (current?.mode !== "black") return null;
     return current.players.find(({ id }) => id === current.currentPlayerId) ?? null;
   };
   const canHumanSubmit = () => {
-    const current = game();
+    const current = activeGame();
     if (current?.status !== "playing") return false;
     const selfId = connection().playerId();
     if (current.mode === "black") return current.currentPlayerId === selfId;
@@ -410,6 +473,10 @@ export function App() {
     const current = game();
     if (!current) return "Ready when you are";
     if (current.status === "finished") return "GAME OVER";
+    if (current.mode === "mix")
+      return current.status === "intermission"
+        ? `NEXT UP · ${current.upcomingTea?.toUpperCase()} TEA`
+        : `${current.currentTea?.toUpperCase() ?? "MIX"} · ROUND ${current.roundNumber}`;
     if (current.mode === "black")
       return currentPlayer()?.name === "You"
         ? "YOUR TURN"
@@ -417,6 +484,10 @@ export function App() {
     return `${current.mode.toUpperCase()} · ROUND ${current.roundNumber}`;
   };
   const result = () => roundResult(game());
+  const mixResult = () => {
+    const current = game();
+    return current?.mode === "mix" ? current.roundResults.at(-1) : null;
+  };
   const playerName = (id: string | null) =>
     game()?.players.find(({ id: playerId }) => playerId === id)?.name ?? "No one";
   const completedCount = () => {
@@ -426,20 +497,47 @@ export function App() {
   };
   const pointsTarget = () => {
     const current = game();
-    return current && current.mode !== "black" ? current.config.pointsToWin : "last player";
+    return current?.mode === "mix"
+      ? current.config.pointsToWin
+      : current && current.mode !== "black"
+        ? current.config.pointsToWin
+        : "last player";
   };
   const activePlayer = (playerId: string) => {
-    const current = game();
+    const current = activeGame();
     return current?.mode === "black" && current.currentPlayerId === playerId;
   };
   const resultTitle = () => {
+    const mixLast = mixResult();
+    if (mixLast)
+      return mixLast.winnerId
+        ? `${playerName(mixLast.winnerId)} takes the ${mixLast.tea} round`
+        : `${mixLast.tea} round ends with no point`;
     const last = result();
     if (!last) return "No round played yet";
     return last.winnerId ? `${playerName(last.winnerId)} takes the point` : "No point this round";
   };
+  function activeGame() {
+    const current = game();
+    return current?.mode === "mix" ? current.activeGame : current;
+  }
+  const teaTheme = () => {
+    const current = game();
+    return current?.mode === "mix"
+      ? ((current.status === "intermission" ? current.upcomingTea : current.currentTea) ?? "mix")
+      : (current?.mode ?? mode());
+  };
+  const activeTea = () => {
+    const current = game();
+    return current?.mode === "mix" ? current.currentTea : current?.mode;
+  };
+  const upcomingTea = () => {
+    const current = game();
+    return current?.mode === "mix" ? current.upcomingTea : null;
+  };
 
   return (
-    <main class="page" data-tea={game()?.mode ?? mode()}>
+    <main class="page" data-tea={teaTheme()}>
       <header class="topbar">
         <div class="brand-lockup">
           <span class="brand-mark" aria-hidden="true">
@@ -460,15 +558,18 @@ export function App() {
       <Show
         when={!game()}
         fallback={
-          <section class="game-layout" aria-label={`${game()?.mode} Tea game`}>
+          <section class="game-layout" aria-label={`${activeTea()} Tea game`}>
             <div class="game-column">
               <div class="round-heading">
                 <div>
                   <p class="eyebrow">
-                    {room() ? "Multiplayer room" : "Solo mode"} · {game()?.mode} Tea
+                    {room() ? "Multiplayer room" : "Solo mode"} ·{" "}
+                    {game()?.mode === "mix" ? "Mix" : game()?.mode} Tea
                   </p>
                   <h2>
-                    {game()?.mode === "black" ? "Keep the word moving." : "Find your winning word."}
+                    {game()?.mode === "black" || (game()?.mode === "mix" && activeTea() === "black")
+                      ? "Keep the word moving."
+                      : "Find your winning word."}
                   </h2>
                 </div>
                 <span class="live-pill">
@@ -478,13 +579,19 @@ export function App() {
               </div>
 
               <section class="fragment-card" aria-live="polite">
-                <div class="fragment-label">Find a word containing</div>
+                <div class="fragment-label">
+                  {game()?.mode === "mix" && game()?.status === "intermission"
+                    ? "Next round"
+                    : "Find a word containing"}
+                </div>
                 <div
                   class="fragment"
                   role="status"
-                  aria-label={`Fragment ${game()?.fragment ?? "—"}`}
+                  aria-label={`Fragment ${activeGame()?.fragment ?? "—"}`}
                 >
-                  {game()?.fragment ?? "…"}
+                  {game()?.mode === "mix" && game()?.status === "intermission"
+                    ? `${upcomingTea()?.toUpperCase()} TEA`
+                    : (activeGame()?.fragment ?? "…")}
                 </div>
                 <div class="fragment-footer">
                   <span>Round {roundNumber(game())}</span>
@@ -495,7 +602,11 @@ export function App() {
               <section class="timer-panel" aria-label="Round countdown">
                 <div class="timer-topline">
                   <span>
-                    {game()?.mode === "black" ? statusText() : "Round closes in"}
+                    {game()?.mode === "black" || (game()?.mode === "mix" && activeTea() === "black")
+                      ? statusText()
+                      : game()?.mode === "mix" && game()?.status === "intermission"
+                        ? "Next round begins in"
+                        : "Round closes in"}
                     <strong>
                       {seconds(remainingMs())}
                       <small>s</small>
@@ -519,7 +630,7 @@ export function App() {
                 </div>
                 <div class="timer-caption">
                   <span>
-                    {game()?.mode === "green"
+                    {activeTea() === "green"
                       ? "First valid word wins"
                       : "One point for the round winner"}
                   </span>
@@ -529,11 +640,11 @@ export function App() {
 
               <form class="answer-form" onSubmit={submit}>
                 <label for="word-entry">
-                  {game()?.mode === "yellow" ? "Your one message this round" : "Your word"}
+                  {activeTea() === "yellow" ? "Your one message this round" : "Your word"}
                 </label>
                 <div class="input-wrap">
                   <Show
-                    when={game()?.mode === "yellow"}
+                    when={activeTea() === "yellow"}
                     fallback={
                       <input
                         ref={(element) => {
@@ -577,11 +688,11 @@ export function App() {
                 <p class="feedback" id="feedback" aria-live="polite">
                   {game()?.status === "finished"
                     ? `${playerName(game()?.winnerId ?? null)} wins the game.`
-                    : game()?.mode === "yellow"
+                    : activeTea() === "yellow"
                       ? "Repeated words in your message count once."
-                      : game()?.mode === "red"
+                      : activeTea() === "red"
                         ? "Your longest valid word counts."
-                        : game()?.mode === "green"
+                        : activeTea() === "green"
                           ? "Keep trying until someone finds a valid word."
                           : "Two missed turns and you’re out."}
                 </p>
@@ -592,7 +703,7 @@ export function App() {
                   Back to setup
                 </button>
                 <p>
-                  {game()?.mode === "black"
+                  {activeTea() === "black"
                     ? "Words cannot be reused."
                     : "Bot plays appear in the live feed."}
                 </p>
@@ -606,6 +717,11 @@ export function App() {
               <section class="round-result-card" aria-live="polite">
                 <p class="eyebrow">Last round</p>
                 <h3>{resultTitle()}</h3>
+                <Show when={mixResult()}>
+                  <p class="muted-copy">
+                    The table moves on to the announced tea after a short pause.
+                  </p>
+                </Show>
                 <Show
                   when={result()?.submissions.length}
                   fallback={
@@ -723,13 +839,15 @@ export function App() {
                 <div>
                   <h3>{game()?.mode} Tea rules</h3>
                   <p>
-                    {game()?.mode === "green"
-                      ? "First valid word wins. Words cannot be reused."
-                      : game()?.mode === "red"
-                        ? "Longest valid word wins. Ties go to the earliest submission."
-                        : game()?.mode === "yellow"
-                          ? "Send one message with several words. Ties go to the earliest message."
-                          : "Play a valid word before the timer runs out. Miss twice and you’re eliminated."}
+                    {game()?.mode === "mix" && activeTea() === "black"
+                      ? "The bomb passes between living players. The first timeout costs 1 HP and ends the Black sequence."
+                      : activeTea() === "green"
+                        ? "First valid word wins. Words cannot be reused."
+                        : activeTea() === "red"
+                          ? "Longest valid word wins. Ties go to the earliest submission."
+                          : activeTea() === "yellow"
+                            ? "Send one message with several words. Ties go to the earliest message."
+                            : "Play a valid word before the timer runs out. Miss twice and you’re eliminated."}
                   </p>
                 </div>
               </section>
@@ -849,7 +967,12 @@ export function App() {
                           <option value="3">3</option>
                         </select>
                       </label>
-                      <Show when={(room()?.room.mode ?? mode()) !== "black"}>
+                      <Show
+                        when={
+                          (room()?.room.mode ?? mode()) !== "black" &&
+                          (room()?.room.mode ?? mode()) !== "mix"
+                        }
+                      >
                         <label>
                           Points to win{" "}
                           <input
@@ -868,32 +991,56 @@ export function App() {
                           />
                         </label>
                       </Show>
-                      <label>
-                        Seconds per turn/round{" "}
-                        <input
-                          type="number"
-                          disabled={connectionState() !== "connected"}
-                          min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
-                          max="120"
-                          value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
-                          onChange={(event) =>
-                            changeRoomSetting(
-                              room()?.room.mode ?? mode(),
-                              "roundTimeMs",
-                              Math.max(
-                                (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
-                                Number(event.currentTarget.value) * 1_000 || 1_000,
-                              ),
-                            )
-                          }
-                        />
-                      </label>
+                      <Show when={(room()?.room.mode ?? mode()) !== "mix"}>
+                        <label>
+                          Seconds per turn/round{" "}
+                          <input
+                            type="number"
+                            disabled={connectionState() !== "connected"}
+                            min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
+                            max="120"
+                            value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
+                            onChange={(event) =>
+                              changeRoomSetting(
+                                room()?.room.mode ?? mode(),
+                                "roundTimeMs",
+                                Math.max(
+                                  (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
+                                  Number(event.currentTarget.value) * 1_000 || 1_000,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      </Show>
+                      <Show
+                        when={
+                          (room()?.room.mode ?? mode()) === "mix" &&
+                          (room()?.players.filter(
+                            (player) => player.connected && player.kind === "human",
+                          ).length ?? 0) +
+                            (room()?.room.botCount ?? 0) <
+                            2
+                        }
+                      >
+                        <p class="feedback" role="status">
+                          Mix needs at least two connected players or bots. Add a player or a bot
+                          before starting.
+                        </p>
+                      </Show>
                       <button
                         class="submit-button"
                         type="button"
                         onClick={() => connection().startRoom()}
                         disabled={
-                          room()?.room.phase === "countdown" || connectionState() !== "connected"
+                          room()?.room.phase === "countdown" ||
+                          connectionState() !== "connected" ||
+                          ((room()?.room.mode ?? mode()) === "mix" &&
+                            (room()?.players.filter(
+                              (player) => player.connected && player.kind === "human",
+                            ).length ?? 0) +
+                              (room()?.room.botCount ?? 0) <
+                              2)
                         }
                       >
                         {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game"}
@@ -1017,7 +1164,7 @@ export function App() {
                   onInput={(event) => updateConfig("botSkill", Number(event.currentTarget.value))}
                 />
               </label>
-              <Show when={mode() !== "black"}>
+              <Show when={mode() !== "black" && mode() !== "mix"}>
                 <label class="setting-control">
                   <span>
                     <strong>Points to win</strong>
@@ -1038,31 +1185,33 @@ export function App() {
                   />
                 </label>
               </Show>
-              <label class="setting-control">
-                <span>
-                  <strong>{mode() === "black" ? "Turn time" : "Time per round"}</strong>
-                  <small>Seconds before the round moves on</small>
-                </span>
-                <span class="time-setting">
-                  <input
-                    class="number-setting"
-                    type="number"
-                    min={mode() === "black" ? 5 : 1}
-                    max="120"
-                    value={config().roundTimeMs / 1_000}
-                    onInput={(event) =>
-                      updateConfig(
-                        "roundTimeMs",
-                        Math.max(
-                          mode() === "black" ? 5_000 : 1_000,
-                          Number(event.currentTarget.value) * 1_000 || 1_000,
-                        ),
-                      )
-                    }
-                  />
-                  <small>sec</small>
-                </span>
-              </label>
+              <Show when={mode() !== "mix"}>
+                <label class="setting-control">
+                  <span>
+                    <strong>{mode() === "black" ? "Turn time" : "Time per round"}</strong>
+                    <small>Seconds before the round moves on</small>
+                  </span>
+                  <span class="time-setting">
+                    <input
+                      class="number-setting"
+                      type="number"
+                      min={mode() === "black" ? 5 : 1}
+                      max="120"
+                      value={config().roundTimeMs / 1_000}
+                      onInput={(event) =>
+                        updateConfig(
+                          "roundTimeMs",
+                          Math.max(
+                            mode() === "black" ? 5_000 : 1_000,
+                            Number(event.currentTarget.value) * 1_000 || 1_000,
+                          ),
+                        )
+                      }
+                    />
+                    <small>sec</small>
+                  </span>
+                </label>
+              </Show>
               <Show when={mode() === "red" || mode() === "yellow"}>
                 <label class="check-setting">
                   <input
@@ -1092,6 +1241,159 @@ export function App() {
                     <small>Turn off to subtract one per invalid word</small>
                   </span>
                 </label>
+              </Show>
+              <Show when={mode() === "mix"}>
+                <label class="setting-control">
+                  <span>
+                    <strong>Points to win</strong>
+                    <small>First to this score wins</small>
+                  </span>
+                  <input
+                    class="number-setting"
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={config().mixConfig?.pointsToWin ?? 4}
+                    onInput={(event) =>
+                      changeMixSetting(
+                        "pointsToWin",
+                        Math.max(1, Number(event.currentTarget.value) || 1),
+                      )
+                    }
+                  />
+                </label>
+                <label class="setting-control">
+                  <span>
+                    <strong>Base HP</strong>
+                    <small>Misses before elimination</small>
+                  </span>
+                  <input
+                    class="number-setting"
+                    type="number"
+                    min="1"
+                    max="12"
+                    value={config().mixConfig?.baseHp ?? 2}
+                    onInput={(event) =>
+                      changeMixSetting(
+                        "baseHp",
+                        Math.max(1, Number(event.currentTarget.value) || 1),
+                      )
+                    }
+                  />
+                </label>
+                <label class="setting-control">
+                  <span>
+                    <strong>Default round time</strong>
+                    <small>Tea-specific times can override this</small>
+                  </span>
+                  <input
+                    class="number-setting"
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={(config().mixConfig?.roundTimeMs ?? 10_000) / 1_000}
+                    onInput={(event) =>
+                      changeMixSetting(
+                        "roundTimeMs",
+                        Math.max(1_000, Number(event.currentTarget.value) * 1_000 || 1_000),
+                      )
+                    }
+                  />
+                </label>
+                <label class="check-setting">
+                  <input
+                    type="checkbox"
+                    checked={config().mixConfig?.avoidImmediateRepeat ?? true}
+                    onChange={(event) =>
+                      changeMixSetting("avoidImmediateRepeat", event.currentTarget.checked)
+                    }
+                  />
+                  <span>
+                    <strong>Avoid back-to-back repeats</strong>
+                    <small>Unless only one tea is enabled</small>
+                  </span>
+                </label>
+                <label class="check-setting">
+                  <input
+                    type="checkbox"
+                    checked={config().mixConfig?.reuseWordsPerTea ?? false}
+                    onChange={(event) =>
+                      changeMixSetting("reuseWordsPerTea", event.currentTarget.checked)
+                    }
+                  />
+                  <span>
+                    <strong>Keep separate word history per tea</strong>
+                    <small>Off: a word used in any tea stays used for the whole game</small>
+                  </span>
+                </label>
+                <For each={["black", "green", "red", "yellow"] as const}>
+                  {(tea) => (
+                    <div class="mix-tea-setting">
+                      <label class="check-setting">
+                        <input
+                          type="checkbox"
+                          checked={config().mixConfig?.[`${tea}Enabled`] ?? true}
+                          disabled={mixTeaCannotBeDisabled(tea)}
+                          onChange={(event) =>
+                            changeMixSetting(`${tea}Enabled`, event.currentTarget.checked)
+                          }
+                        />
+                        <span>
+                          <strong>
+                            {tea[0]?.toUpperCase()}
+                            {tea.slice(1)} Tea
+                          </strong>
+                          <small>
+                            {tea === "black" ? "Bomb sequence" : "Round winner scores points"}
+                          </small>
+                        </span>
+                      </label>
+                      <label class="setting-control">
+                        <span>
+                          <strong>Time (seconds)</strong>
+                        </span>
+                        <input
+                          class="number-setting"
+                          type="number"
+                          min={tea === "black" ? 5 : 1}
+                          max="120"
+                          value={
+                            ((config().mixConfig?.[`${tea}TimeMs`] ||
+                              config().mixConfig?.roundTimeMs) ??
+                              10_000) / 1_000
+                          }
+                          onInput={(event) =>
+                            changeMixSetting(
+                              `${tea}TimeMs`,
+                              Math.max(
+                                tea === "black" ? 5_000 : 1_000,
+                                Number(event.currentTarget.value) * 1_000 || 1_000,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                      <label class="setting-control">
+                        <span>
+                          <strong>{tea === "black" ? "Points per word" : "Points"}</strong>
+                        </span>
+                        <input
+                          class="number-setting"
+                          type="number"
+                          min="0"
+                          max="20"
+                          value={config().mixConfig?.[`${tea}Points`] ?? 1}
+                          onInput={(event) =>
+                            changeMixSetting(
+                              `${tea}Points`,
+                              Math.max(0, Number(event.currentTarget.value) || 0),
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
+                </For>
               </Show>
             </div>
             <div class="setup-footer">

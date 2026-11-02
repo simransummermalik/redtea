@@ -15,7 +15,7 @@ Keep dependencies minimal and document why each new dependency is needed.
 ## Architecture
 
 - `packages/engine` is pure game logic: no DOM, I/O, `Date.now()`, or timers. Game state advances through `step(state, event, now) => { state, effects }` with injected time and random values.
-- Modes implement a common round strategy interface. Black is turn based; Mix and other modes should fit without changing the engine core.
+- Modes implement a common round strategy interface with an explicit round-complete boundary. Black is turn based within a round; Mix composes existing tea strategies, combines their point/HP changes, and selects the next round without duplicating tea rules.
 - `packages/words` owns reproducible dictionary processing, generated word data, and 3-letter fragment indexes.
 - `packages/protocol` owns shared WebSocket schemas and types.
 - `apps/server` is authoritative for multiplayer validity. Clients do not decide word validity.
@@ -25,7 +25,7 @@ Keep dependencies minimal and document why each new dependency is needed.
 
 - Server messages use full snapshots rather than deltas. This keeps room entry and later reconnect support simple. Snapshots omit catalogs, RNG state, and planned bot actions.
 - During a Yellow round, all message contents and scores are hidden until the round resolves.
-- Protocol version 2 keeps the v1 actions, adds session resumption through optional `sessionToken` on `hello`, and adds `requestId` to room create/join actions so a retry after a lost `welcome` reclaims the same seat. `welcome` returns the rotated token. Snapshots include the `countdown` phase and `countdownEndsAt`; `shutdown` asks clients to reconnect after deploy shutdown. Reject incompatible protocol versions.
+- Protocol version 3 keeps the v1/v2 actions, adds Mix mode to the mode schema, and preserves v2 session resumption through optional `sessionToken` on `hello` and `requestId` on room create/join. `welcome` returns the rotated token. Snapshots include the `countdown` phase and `countdownEndsAt`; Mix game snapshots expose the current tea, upcoming tea, and each player's points and HP. `shutdown` asks clients to reconnect after deploy shutdown. Reject incompatible protocol versions.
 - The browser keeps the session token in `sessionStorage`, scoped to its tab and lifetime. This restores seats after reloads while avoiding a bearer credential that persists across browser restarts. Reconnect does not reset game timers or reveal additional state. Yellow submission contents and scores remain hidden until the round resolves.
 - A disconnected seat is reserved during the configurable reconnect grace period. Black turns continue to their normal timeout and take the usual HP penalty. During Green, Red, and Yellow, disconnected players simply make no submissions and are not eliminated. Reconnecting players recover the same seat and full current snapshot in every mode.
 - When the host remains disconnected past grace, promote the connected human with the earliest join order. Only the host can change configuration or start a game. A host start opens a 10-second join countdown; all supported modes require at least two participants when it resolves.

@@ -1,6 +1,9 @@
 import {
   type AnyRoundGameState,
   type BlackGameState,
+  type MixGameState,
+  createMixGame,
+  stepMix,
   createBlackGame,
   createGreenGame,
   createRedGame,
@@ -17,8 +20,8 @@ import {
 } from "@redtea/engine";
 import { PROTOCOL_VERSION, serverMessageSchema } from "@redtea/protocol";
 
-export type GameMode = "black" | RoundModeName;
-export type AnyGameState = BlackGameState | AnyRoundGameState;
+export type GameMode = "black" | "mix" | RoundModeName;
+export type AnyGameState = BlackGameState | AnyRoundGameState | MixGameState;
 export interface RoomView {
   type: "snapshot";
   room: {
@@ -136,7 +139,17 @@ abstract class BaseConnection implements GameConnection {
 
 export class LocalConnection extends BaseConnection {
   start(options: StartOptions): void {
-    if (options.mode === "black") {
+    if (options.mode === "mix") {
+      this.game = createMixGame({
+        players: options.players,
+        catalog: options.catalog,
+        seed: options.seed,
+        config: options.config as never,
+      });
+      const result = stepMix(this.game, { type: "START" }, this.now());
+      this.game = result.state;
+      this.emit(result.effects);
+    } else if (options.mode === "black") {
       this.game = createBlackGame({
         players: options.players,
         catalog: options.catalog,
@@ -180,9 +193,20 @@ export class LocalConnection extends BaseConnection {
   }
 
   submit(mode: GameMode, text: string): void {
-    if (this.game?.status !== "playing") return;
+    if (!this.game || (this.game.status !== "playing" && this.game.status !== "intermission"))
+      return;
     const now = this.now();
-    if (this.game.mode === "black") {
+    if (this.game.mode === "mix") {
+      const result = stepMix(
+        this.game,
+        this.game.currentTea === "yellow"
+          ? { type: "SUBMIT_MESSAGE", playerId: this.myId, message: text }
+          : { type: "SUBMIT_WORD", playerId: this.myId, word: text },
+        now,
+      );
+      this.game = result.state;
+      this.emit(result.effects);
+    } else if (this.game.mode === "black") {
       const result = step(this.game, { type: "SUBMIT_WORD", playerId: this.myId, word: text }, now);
       this.game = result.state;
       this.emit(result.effects);
@@ -205,7 +229,9 @@ export class LocalConnection extends BaseConnection {
     const result =
       this.game.mode === "black"
         ? step(this.game, { type: "TICK" }, now)
-        : stepRoundGame(this.game, { type: "TICK" }, now);
+        : this.game.mode === "mix"
+          ? stepMix(this.game, { type: "TICK" }, now)
+          : stepRoundGame(this.game, { type: "TICK" }, now);
     if (result.effects.length) {
       this.game = result.state;
       this.emit(result.effects);

@@ -801,6 +801,17 @@ button {
   gap: 4px 26px;
   margin-top: 22px;
 }
+.mix-tea-setting {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 130px;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--tea-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--tea-accent-soft) 35%, var(--tea-surface));
+}
 .config-grid .setting-control {
   min-width: 0;
   border-bottom: 1px solid var(--tea-line);
@@ -1035,6 +1046,12 @@ button {
   }
   .result-submissions li > span {
     grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .mix-tea-setting {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mix-tea-setting > .check-setting {
     grid-column: 1 / -1;
   }
 }

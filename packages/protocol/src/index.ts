@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const MAX_MESSAGE_BYTES = 2_048;
 export const MAX_PLAYER_NAME_LENGTH = 24;
 
@@ -23,7 +23,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set_ready"), ready: z.boolean() }),
   z.object({
     type: z.literal("configure_room"),
-    mode: z.enum(["black", "green", "red", "yellow"]),
+    mode: z.enum(["black", "green", "red", "yellow", "mix"]),
     config,
     botCount: z.number().int().min(0).max(3),
   }),
@@ -55,7 +55,7 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
       code: roomCode,
       phase: z.enum(["lobby", "countdown", "playing", "finished"]),
       hostId: z.string(),
-      mode: z.enum(["black", "green", "red", "yellow"]),
+      mode: z.enum(["black", "green", "red", "yellow", "mix"]),
       botCount: z.number().int(),
       countdownEndsAt: z.number().nullable(),
     }),

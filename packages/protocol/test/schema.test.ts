@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clientMessageSchema, serverMessageSchema } from "../src";
+import { clientMessageSchema, PROTOCOL_VERSION, serverMessageSchema } from "../src";
 
 describe("WebSocket protocol schemas", () => {
   test("accepts valid intents and rejects malformed or unknown messages", () => {
@@ -11,12 +11,28 @@ describe("WebSocket protocol schemas", () => {
   });
 
   test("validates versioned handshake and room snapshots", () => {
+    expect(PROTOCOL_VERSION).toBe(3);
     expect(
       serverMessageSchema.safeParse({
         type: "hello",
         version: 2,
         clientSentAt: 10,
         serverReceivedAt: 11,
+      }).success,
+    ).toBe(true);
+    expect(
+      serverMessageSchema.safeParse({
+        type: "snapshot",
+        room: {
+          code: "ABCDE",
+          phase: "playing",
+          hostId: "p1",
+          mode: "mix",
+          botCount: 0,
+          countdownEndsAt: null,
+        },
+        players: [],
+        game: { mode: "mix", currentTea: "black", upcomingTea: "yellow" },
       }).success,
     ).toBe(true);
     expect(

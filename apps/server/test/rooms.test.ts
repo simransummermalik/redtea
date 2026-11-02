@@ -84,7 +84,7 @@ function fixture(options: ConstructorParameters<typeof RoomService>[0] = {}) {
   const hello = (id: string, sessionToken?: string) =>
     receive(id, {
       type: "hello",
-      version: 2,
+      version: 3,
       clientSentAt: 10,
       ...(sessionToken ? { sessionToken } : {}),
     });
@@ -102,7 +102,7 @@ function fixture(options: ConstructorParameters<typeof RoomService>[0] = {}) {
 
 function createTwoPlayerRoom(
   f: ReturnType<typeof fixture>,
-  mode: "black" | "green" | "red" | "yellow" = "green",
+  mode: "black" | "green" | "red" | "yellow" | "mix" = "green",
 ) {
   f.connect("host");
   f.connect("guest");
@@ -115,7 +115,18 @@ function createTwoPlayerRoom(
     type: "configure_room",
     mode,
     botCount: 0,
-    config: mode === "black" ? { initialTurnMs: 5_000 } : {},
+    config:
+      mode === "black"
+        ? { initialTurnMs: 5_000 }
+        : mode === "mix"
+          ? {
+              blackEnabled: true,
+              greenEnabled: false,
+              redEnabled: false,
+              yellowEnabled: false,
+              blackTimeMs: 5_000,
+            }
+          : {},
   });
 }
 
@@ -271,6 +282,33 @@ describe("RoomService protocol and lifecycle", () => {
     });
   }
 
+  test("reconnects during a Black sequence inside Mix without resetting its turn", () => {
+    const f = fixture();
+    createTwoPlayerRoom(f, "mix");
+    const token = f.sessionToken("guest");
+    start(f);
+    const before = f.latestSnapshot("host");
+    if (before?.type !== "snapshot") throw new Error("Expected Mix snapshot");
+    const game = before.game as {
+      mode: string;
+      currentTea: string;
+      activeGame: { mode: string; fragment: string; currentPlayerId: string; turnEndsAt: number };
+    };
+    expect(game.mode).toBe("mix");
+    expect(game.currentTea).toBe("black");
+    expect(game.activeGame.mode).toBe("black");
+    f.service.disconnect("guest");
+    f.connect("guest-reconnected");
+    f.hello("guest-reconnected", token);
+    const after = f.latestSnapshot("guest-reconnected");
+    if (after?.type !== "snapshot") throw new Error("Expected reconnect snapshot");
+    const resumed = after.game as typeof game;
+    expect(resumed.currentTea).toBe("black");
+    expect(resumed.activeGame.fragment).toBe(game.activeGame.fragment);
+    expect(resumed.activeGame.currentPlayerId).toBe(game.activeGame.currentPlayerId);
+    expect(resumed.activeGame.turnEndsAt).toBe(game.activeGame.turnEndsAt);
+  });
+
   for (const mode of ["green", "red", "yellow"] as const) {
     test(`a disconnected ${mode} player stays seated and is not eliminated`, () => {
       const f = fixture();
@@ -318,6 +356,62 @@ describe("RoomService protocol and lifecycle", () => {
     expect(next.players.find((player) => player.id === currentPlayer.id)?.hp).toBe(
       currentPlayer.hp - 1,
     );
+  });
+
+  test("AFK during a Black sequence inside Mix costs HP and resolves that round", () => {
+    const f = fixture();
+    createTwoPlayerRoom(f, "mix");
+    start(f);
+    const before = f.latestSnapshot("host");
+    if (before?.type !== "snapshot") throw new Error("Expected game snapshot");
+    const mix = before.game as {
+      currentTea: string;
+      activeGame: { currentPlayerId: string; turnEndsAt: number };
+      players: { id: string; hp: number }[];
+    };
+    expect(mix.currentTea).toBe("black");
+    const timedOutId = mix.activeGame.currentPlayerId;
+    const turnPeer = timedOutId === "player-1" ? "host" : "guest";
+    const observer = turnPeer === "host" ? "guest" : "host";
+    f.service.disconnect(turnPeer);
+    f.clock.advance(mix.activeGame.turnEndsAt - 110_000 + 1);
+    const after = f.latestSnapshot(observer);
+    if (after?.type !== "snapshot") throw new Error("Expected Mix timeout snapshot");
+    const next = after.game as {
+      status: string;
+      roundResults: { tea: string }[];
+      players: { id: string; hp: number }[];
+    };
+    expect(next.status).toBe("intermission");
+    expect(next.roundResults.at(-1)?.tea).toBe("black");
+    expect(next.players.find(({ id }) => id === timedOutId)?.hp).toBe(1);
+  });
+
+  test("host migration during Mix preserves the active round", () => {
+    const f = fixture({ reconnectGraceMs: 2_000 });
+    createTwoPlayerRoom(f, "mix");
+    start(f);
+    const before = f.latestSnapshot("guest");
+    if (before?.type !== "snapshot") throw new Error("Expected Mix snapshot");
+    const activeRound = (before.game as { currentTea: string }).currentTea;
+    f.service.disconnect("host");
+    f.clock.advance(2_000);
+    const after = f.latestSnapshot("guest");
+    expect(after?.type === "snapshot" && after.room.hostId).toBe("player-2");
+    expect(after?.type === "snapshot" && (after.game as { currentTea: string }).currentTea).toBe(
+      activeRound,
+    );
+    f.receive("guest", {
+      type: "configure_room",
+      mode: "mix",
+      botCount: 0,
+      config: { greenEnabled: true },
+    });
+    expect(
+      f.out
+        .get("guest")
+        ?.some((message) => message.type === "error" && message.code === "host_only"),
+    ).toBe(false);
   });
 
   test("host migration happens when the grace period expires", () => {

@@ -28,6 +28,7 @@ export interface BlackConfig {
   minimumFragmentSolutions: number;
   botFastestThinkMs: number;
   botSlowestThinkMs: number;
+  stopAfterTimeout: boolean;
 }
 
 export const defaultBlackConfig: BlackConfig = {
@@ -40,6 +41,7 @@ export const defaultBlackConfig: BlackConfig = {
   minimumFragmentSolutions: 5,
   botFastestThinkMs: 900,
   botSlowestThinkMs: 4_500,
+  stopAfterTimeout: false,
 };
 
 export interface BlackPlayerState extends GamePlayer {
@@ -63,7 +65,7 @@ export interface BotAction {
 
 export interface BlackGameState {
   mode: "black";
-  status: "ready" | "playing" | "finished";
+  status: "ready" | "playing" | "between-rounds" | "finished";
   config: BlackConfig;
   catalog: WordCatalog;
   players: BlackPlayerState[];
@@ -435,6 +437,22 @@ function expireTurn(state: BlackGameState, now: number, effects: BlackEffect[]):
     } satisfies BlackRoundResult,
     botAction: null,
   };
+  if (state.config.stopAfterTimeout) {
+    const alive = livingPlayers(next);
+    if (alive.length <= 1) {
+      const finished = finishGame(next);
+      effects.push({ type: "game-finished", winnerId: finished.winnerId ?? playerId });
+      return finished;
+    }
+    return {
+      ...next,
+      status: "between-rounds",
+      currentPlayerId: playerId,
+      fragment: null,
+      turnStartedAt: null,
+      turnEndsAt: null,
+    };
+  }
   return completeTurn(next, playerId, now, effects);
 }
 
@@ -442,9 +460,11 @@ function startRound(
   state: BlackGameState,
   now: number,
 ): { state: BlackGameState; effects: BlackEffect[] } {
-  if (state.status !== "ready") return { state, effects: [] };
+  if (state.status !== "ready" && state.status !== "between-rounds") return { state, effects: [] };
   const effects: BlackEffect[] = [];
-  const firstPlayerId = state.players[0]?.id;
+  const firstPlayerId = state.currentPlayerId
+    ? nextPlayerId(state, state.currentPlayerId)
+    : state.players.find(({ alive }) => alive)?.id;
   if (!firstPlayerId) return { state, effects };
   return {
     state: beginTurn(state, firstPlayerId, now, state.config.initialTurnMs, effects),
@@ -518,6 +538,9 @@ export const blackTeaMode: ModeStrategy<
   step,
   latestRoundResult(state) {
     return state.lastRoundResult;
+  },
+  isRoundComplete(state) {
+    return state.status === "between-rounds";
   },
   startRound,
   submit,

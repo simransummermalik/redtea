@@ -7,6 +7,8 @@ export type RoundModeName = "green" | "red" | "yellow";
 export interface RoundModeConfig {
   pointsToWin: number;
   roundTimeMs: number;
+  pointValue: number;
+  manualRoundBoundary: boolean;
   botCount: number;
   allowWordReuse: boolean;
   botFastestThinkMs: number;
@@ -20,6 +22,8 @@ export interface YellowConfig extends RoundModeConfig {
 }
 
 const commonDefaults = {
+  pointValue: 1,
+  manualRoundBoundary: false,
   roundTimeMs: 10_000,
   botCount: 2,
   allowWordReuse: true,
@@ -72,7 +76,7 @@ interface BotAction {
 
 export interface RoundGameState<Mode extends RoundModeName, Config extends RoundModeConfig> {
   mode: Mode;
-  status: "ready" | "playing" | "finished";
+  status: "ready" | "playing" | "between-rounds" | "finished";
   config: Config;
   catalog: WordCatalog;
   players: RoundPlayer[];
@@ -177,6 +181,9 @@ function createState<Mode extends RoundModeName, Config extends RoundModeConfig>
 function validateConfig(config: RoundModeConfig): void {
   if (!Number.isInteger(config.pointsToWin) || config.pointsToWin < 1) {
     throw new RangeError("Points to win must be a positive integer");
+  }
+  if (!Number.isInteger(config.pointValue) || config.pointValue < 0) {
+    throw new RangeError("Point value must be a non-negative integer");
   }
   if (!Number.isFinite(config.roundTimeMs) || config.roundTimeMs <= 0) {
     throw new RangeError("Round time must be positive");
@@ -346,10 +353,7 @@ function addSubmission<Mode extends RoundModeName, Config extends RoundModeConfi
     roundSubmissions: [...state.roundSubmissions, submission],
     submittedPlayerIds:
       state.mode === "green" ? state.submittedPlayerIds : [...state.submittedPlayerIds, playerId],
-    usedWords:
-      state.mode === "green" || !state.config.allowWordReuse
-        ? [...state.usedWords, ...checked.validWords]
-        : state.usedWords,
+    usedWords: [...state.usedWords, ...checked.validWords],
     botActions: state.botActions.filter(({ playerId: botId }) => botId !== playerId),
   } as RoundGameState<Mode, Config>;
   effects.push({ type: "submission-recorded", round: state.roundNumber, submission });
@@ -375,7 +379,7 @@ function resolveRound<Mode extends RoundModeName, Config extends RoundModeConfig
     });
   const winnerId = greenWinnerId ?? ranked[0]?.playerId ?? null;
   const deltas: Record<string, number> = Object.fromEntries(state.players.map(({ id }) => [id, 0]));
-  if (winnerId) deltas[winnerId] = 1;
+  if (winnerId) deltas[winnerId] = state.config.pointValue;
   const result: RoundResult = {
     round: state.roundNumber,
     fragment: state.fragment ?? "",
@@ -404,18 +408,17 @@ function resolveRound<Mode extends RoundModeName, Config extends RoundModeConfig
       winnerId: winner.id,
     };
   }
-  return startRound(
-    {
-      ...state,
-      players,
-      roundResults: results,
-      roundStartedAt: null,
-      roundEndsAt: null,
-      botActions: [],
-    },
-    now,
-    effects,
-  );
+  const completed = {
+    ...state,
+    players,
+    roundResults: results,
+    roundStartedAt: null,
+    roundEndsAt: null,
+    botActions: [],
+  };
+  return state.config.manualRoundBoundary
+    ? { ...completed, status: "between-rounds" }
+    : startRound(completed, now, effects);
 }
 
 function processDueBots<Mode extends RoundModeName, Config extends RoundModeConfig>(
@@ -445,7 +448,8 @@ function createModeStrategy<Mode extends RoundModeName, Config extends RoundMode
 ): RoundModeStrategy<RoundGameState<Mode, Config>, Event> {
   return {
     start(state, now) {
-      if (state.status !== "ready") return { state, effects: [] };
+      if (state.status !== "ready" && state.status !== "between-rounds")
+        return { state, effects: [] };
       const effects: RoundModeEffect[] = [];
       return { state: startRound(state, now, effects), effects };
     },
@@ -482,6 +486,9 @@ function createModeStrategy<Mode extends RoundModeName, Config extends RoundMode
     },
     latestRoundResult(state) {
       return state.roundResults.at(-1) ?? null;
+    },
+    isRoundComplete(state) {
+      return state.status === "between-rounds";
     },
     resolve(state) {
       if (state.status !== "finished" || state.winnerId === null) return null;
