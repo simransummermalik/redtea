@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "bun --hot src/index.ts",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@redtea/engine": "workspace:*",
     "@redtea/protocol": "workspace:*"
   }
 }
