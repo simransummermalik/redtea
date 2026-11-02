@@ -13,6 +13,7 @@ import {
   getRoundTimeRemainingMs,
   getTimeRemainingMs,
 } from "@redtea/engine";
+import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import {
   type AnyGameState,
@@ -145,6 +146,9 @@ export function App() {
   const [game, setGame] = createSignal<AnyGameState | null>(null);
   const [connection, setConnection] = createSignal<GameConnection>(new LocalConnection());
   const [room, setRoom] = createSignal<RoomView | undefined>();
+  const [connectionState, setConnectionState] = createSignal<
+    "connected" | "reconnecting" | "disconnected"
+  >("connected");
   const [name, setName] = createSignal("Player");
   const [roomCodeEntry, setRoomCodeEntry] = createSignal("");
   const [lobbyError, setLobbyError] = createSignal("");
@@ -156,6 +160,7 @@ export function App() {
     ReturnType<typeof loadWordCatalog>
   > | null>(null);
   let inputRef: HTMLInputElement | HTMLTextAreaElement | undefined;
+  let unsubscribeActive = () => {};
 
   const config = () => configs()[mode()];
   function updateConfig<K extends keyof UiModeConfig>(key: K, value: UiModeConfig[K]): void {
@@ -198,17 +203,26 @@ export function App() {
     if (items.length) setFeed((currentFeed) => [...items, ...currentFeed].slice(0, 40));
   }
 
-  function activateRemote(): RemoteConnection {
-    const remote = new RemoteConnection();
-    connection().close();
-    setConnection(remote);
-    remote.subscribe((update) => {
+  function subscribeConnection(active: GameConnection): void {
+    unsubscribeActive();
+    unsubscribeActive = active.subscribe((update) => {
       setClock(update.now);
       setGame(update.game);
       setRoom(update.room);
       setLobbyError(update.error ?? "");
+      setConnectionState(update.connectionState);
       if (update.effects.length) recordEffects(update.effects);
     });
+  }
+
+  function activateRemote(
+    resume?: ConstructorParameters<typeof RemoteConnection>[0],
+  ): RemoteConnection {
+    unsubscribeActive();
+    const remote = new RemoteConnection(resume);
+    connection().close();
+    setConnection(remote);
+    subscribeConnection(remote);
     return remote;
   }
 
@@ -304,6 +318,10 @@ export function App() {
     if (current?.status !== "playing") return;
     const text = entry().trim();
     if (!text) return;
+    if (connectionState() !== "connected") {
+      setLobbyError("Reconnecting… your draft is still here. Submit it when you’re back online.");
+      return;
+    }
     setEntry("");
     if (current.mode !== "black" || current.currentPlayerId === connection().playerId())
       connection().submit(current.mode, text);
@@ -316,17 +334,52 @@ export function App() {
       .catch((error: unknown) =>
         setLoadError(error instanceof Error ? error.message : "Could not load the game dictionary"),
       );
-    const unsubscribe = connection().subscribe((update) => {
-      setClock(update.now);
-      setGame(update.game);
-      setRoom(update.room);
-      setLobbyError(update.error ?? "");
-      if (update.effects.length) recordEffects(update.effects);
-    });
+    subscribeConnection(connection());
+    try {
+      const savedRaw = JSON.parse(sessionStorage.getItem("redtea.session") ?? "null") as unknown;
+      const saved =
+        typeof savedRaw === "object" &&
+        savedRaw !== null &&
+        "token" in savedRaw &&
+        typeof savedRaw.token === "string" &&
+        savedRaw.token.length >= 16 &&
+        savedRaw.token.length <= 128 &&
+        "roomCode" in savedRaw &&
+        typeof savedRaw.roomCode === "string" &&
+        /^[A-Z0-9]{5}$/.test(savedRaw.roomCode)
+          ? { token: savedRaw.token, roomCode: savedRaw.roomCode }
+          : undefined;
+      const pendingRaw = JSON.parse(
+        sessionStorage.getItem("redtea.pendingRoomAction") ?? "null",
+      ) as unknown;
+      const pendingParsed = clientMessageSchema.safeParse(pendingRaw);
+      const pendingRoomAction =
+        pendingParsed.success &&
+        (pendingParsed.data.type === "create_room" || pendingParsed.data.type === "join_room")
+          ? pendingParsed.data
+          : undefined;
+      if (savedRaw !== null && !saved) sessionStorage.removeItem("redtea.session");
+      if (pendingRaw !== null && !pendingRoomAction)
+        sessionStorage.removeItem("redtea.pendingRoomAction");
+      if ((saved?.token && saved.roomCode) || pendingRoomAction)
+        activateRemote({
+          ...(saved?.token && saved.roomCode
+            ? { token: saved.token, roomCode: saved.roomCode }
+            : {}),
+          ...(pendingRoomAction ? { pendingRoomAction } : {}),
+        });
+    } catch {
+      try {
+        sessionStorage.removeItem("redtea.session");
+        sessionStorage.removeItem("redtea.pendingRoomAction");
+      } catch {
+        // Storage may be disabled; the room can still be used for this tab session.
+      }
+    }
     const interval = window.setInterval(() => connection().tick(), 50);
     onCleanup(() => {
       window.clearInterval(interval);
-      unsubscribe();
+      unsubscribeActive();
     });
   });
 
@@ -420,7 +473,7 @@ export function App() {
                 </div>
                 <span class="live-pill">
                   <span />
-                  {statusText()}
+                  {connectionState() === "reconnecting" ? "RECONNECTING…" : statusText()}
                 </span>
               </div>
 
@@ -702,6 +755,24 @@ export function App() {
                   <p>
                     Share code <strong>{room()?.room.code}</strong> with a friend.
                   </p>
+                  <Show when={connectionState() === "reconnecting"}>
+                    <p class="connection-notice" role="status">
+                      Reconnecting… your current input stays on this device.
+                    </p>
+                  </Show>
+                  <Show when={room()?.room.phase === "countdown"}>
+                    <div class="join-countdown" role="status" aria-live="polite">
+                      <strong>
+                        Join window ·{" "}
+                        {Math.max(
+                          0,
+                          Math.ceil(((room()?.room.countdownEndsAt ?? clock()) - clock()) / 1_000),
+                        )}
+                        s
+                      </strong>
+                      <p>There’s still time to pull up a seat.</p>
+                    </div>
+                  </Show>
                   <ul class="lobby-player-list">
                     <For each={room()?.players ?? []}>
                       {(player) => (
@@ -720,6 +791,7 @@ export function App() {
                     <button
                       class="restart-button"
                       type="button"
+                      disabled={connectionState() !== "connected"}
                       onClick={() =>
                         connection().setReady(
                           !(
@@ -741,6 +813,7 @@ export function App() {
                         Mode{" "}
                         <select
                           value={room()?.room.mode}
+                          disabled={connectionState() !== "connected"}
                           onChange={(event) => {
                             const next = event.currentTarget.value as TeaMode;
                             setMode(next);
@@ -756,6 +829,7 @@ export function App() {
                         Bot seats{" "}
                         <select
                           value={room()?.room.botCount}
+                          disabled={connectionState() !== "connected"}
                           onChange={(event) => {
                             const bots = Number(event.currentTarget.value);
                             updateConfig("botCount", bots);
@@ -780,6 +854,7 @@ export function App() {
                           Points to win{" "}
                           <input
                             type="number"
+                            disabled={connectionState() !== "connected"}
                             min="1"
                             max="99"
                             value={configs()[room()?.room.mode ?? mode()].pointsToWin}
@@ -797,6 +872,7 @@ export function App() {
                         Seconds per turn/round{" "}
                         <input
                           type="number"
+                          disabled={connectionState() !== "connected"}
                           min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
                           max="120"
                           value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
@@ -816,8 +892,11 @@ export function App() {
                         class="submit-button"
                         type="button"
                         onClick={() => connection().startRoom()}
+                        disabled={
+                          room()?.room.phase === "countdown" || connectionState() !== "connected"
+                        }
                       >
-                        Start game
+                        {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game"}
                       </button>
                     </div>
                   </Show>
@@ -828,6 +907,11 @@ export function App() {
               }
             >
               <div class="lobby-content">
+                <Show when={connectionState() === "reconnecting"}>
+                  <p class="connection-notice" role="status">
+                    Reconnecting to your room…
+                  </p>
+                </Show>
                 <label class="setting-control">
                   <span>
                     <strong>Your name</strong>
@@ -842,12 +926,14 @@ export function App() {
                   <button
                     class="submit-button"
                     type="button"
+                    disabled={connectionState() !== "connected"}
                     onClick={() => startRoomConnection(true)}
                   >
                     Create room
                   </button>
                   <input
                     aria-label="Room code"
+                    disabled={connectionState() !== "connected"}
                     placeholder="Room code"
                     maxlength="5"
                     value={roomCodeEntry()}
@@ -856,7 +942,7 @@ export function App() {
                   <button
                     class="restart-button"
                     type="button"
-                    disabled={roomCodeEntry().length !== 5}
+                    disabled={roomCodeEntry().length !== 5 || connectionState() !== "connected"}
                     onClick={() => startRoomConnection(false)}
                   >
                     Join

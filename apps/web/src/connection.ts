@@ -23,10 +23,11 @@ export interface RoomView {
   type: "snapshot";
   room: {
     code: string;
-    phase: "lobby" | "playing" | "finished";
+    phase: "lobby" | "countdown" | "playing" | "finished";
     hostId: string;
     mode: GameMode;
     botCount: number;
+    countdownEndsAt: number | null;
   };
   players: {
     id: string;
@@ -43,6 +44,7 @@ export interface ConnectionUpdate {
   effects: readonly (RoundModeEffect | { type: string; [key: string]: unknown })[];
   room?: RoomView;
   error?: string;
+  connectionState: "connected" | "reconnecting" | "disconnected";
 }
 
 export interface StartOptions {
@@ -65,7 +67,12 @@ export interface GameConnection {
   configureRoom(mode: GameMode, config: Record<string, number | boolean>, botCount: number): void;
   startRoom(): void;
   close(): void;
+  connected(): boolean;
 }
+
+type PendingRoomAction =
+  | { type: "create_room"; requestId: string; name: string }
+  | { type: "join_room"; requestId: string; code: string; name: string };
 
 abstract class BaseConnection implements GameConnection {
   protected game: AnyGameState | null = null;
@@ -73,9 +80,14 @@ abstract class BaseConnection implements GameConnection {
   protected myId = "you";
   protected room: RoomView | undefined;
   protected error: string | undefined;
+  protected state: "connected" | "reconnecting" | "disconnected" = "connected";
 
   playerId(): string {
     return this.myId;
+  }
+
+  connected(): boolean {
+    return this.state === "connected";
   }
 
   subscribe(listener: (update: ConnectionUpdate) => void): () => void {
@@ -84,6 +96,7 @@ abstract class BaseConnection implements GameConnection {
       game: this.game,
       now: this.now(),
       effects: [],
+      connectionState: this.state,
       ...(this.room ? { room: this.room } : {}),
       ...(this.error ? { error: this.error } : {}),
     });
@@ -99,6 +112,7 @@ abstract class BaseConnection implements GameConnection {
       game: this.game,
       now: this.now(),
       effects,
+      connectionState: this.state,
       ...(this.room ? { room: this.room } : {}),
       ...(this.error ? { error: this.error } : {}),
     };
@@ -213,22 +227,59 @@ export class LocalConnection extends BaseConnection {
 }
 
 export class RemoteConnection extends BaseConnection {
-  private readonly socket: WebSocket;
+  private socket: WebSocket | undefined;
   private readonly pending: unknown[] = [];
+  private sessionToken: string | undefined;
+  private roomCode: string | undefined;
+  private pendingRoomAction: PendingRoomAction | undefined;
+  private manuallyClosed = false;
+  private reconnectDelay = 500;
+  private reconnectTimer: number | undefined;
   private offsetMs = 0;
   private clientSentAt = 0;
 
-  constructor() {
+  constructor(resume?: {
+    token?: string;
+    roomCode?: string;
+    pendingRoomAction?: PendingRoomAction;
+  }) {
     super();
-    this.socket = new WebSocket(
+    this.sessionToken = resume?.token;
+    this.roomCode = resume?.roomCode;
+    this.pendingRoomAction = resume?.pendingRoomAction;
+    this.openSocket();
+  }
+
+  private openSocket(): void {
+    this.state = "reconnecting";
+    const socket = new WebSocket(
       `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`,
     );
-    this.socket.addEventListener("open", () => {
+    this.socket = socket;
+    socket.addEventListener("open", () => {
+      if (this.socket !== socket || this.manuallyClosed) return;
       this.clientSentAt = Date.now();
-      this.send({ type: "hello", version: PROTOCOL_VERSION, clientSentAt: this.clientSentAt });
-      for (const message of this.pending.splice(0)) this.socket.send(JSON.stringify(message));
+      this.send({
+        type: "hello",
+        version: PROTOCOL_VERSION,
+        clientSentAt: this.clientSentAt,
+        ...(this.sessionToken ? { sessionToken: this.sessionToken } : {}),
+      });
+      for (const message of this.pending.splice(0)) socket.send(JSON.stringify(message));
+      if (!this.sessionToken && this.pendingRoomAction)
+        socket.send(JSON.stringify(this.pendingRoomAction));
+      this.emit();
     });
-    this.socket.addEventListener("message", (event) => this.onMessage(event.data));
+    socket.addEventListener("message", (event) => {
+      if (this.socket === socket) this.onMessage(event.data);
+    });
+    socket.addEventListener("close", () => {
+      if (this.socket !== socket || this.manuallyClosed) return;
+      this.state = "reconnecting";
+      this.emit();
+      this.reconnectTimer = window.setTimeout(() => this.openSocket(), this.reconnectDelay);
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 10_000);
+    });
   }
 
   protected override now(): number {
@@ -236,8 +287,9 @@ export class RemoteConnection extends BaseConnection {
   }
 
   private send(message: unknown): void {
-    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
-    else if (this.socket.readyState === WebSocket.CONNECTING) this.pending.push(message);
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+    else if (this.socket?.readyState === WebSocket.CONNECTING && !this.sessionToken)
+      this.pending.push(message);
   }
 
   private onMessage(data: unknown): void {
@@ -252,18 +304,75 @@ export class RemoteConnection extends BaseConnection {
     if (!parsed.success) return;
     const message = parsed.data;
     if (message.type === "hello") {
+      this.reconnectDelay = 500;
       const receivedAt = Date.now();
       this.offsetMs = message.serverReceivedAt - (message.clientSentAt + receivedAt) / 2;
+      if (!this.sessionToken) this.state = "connected";
     } else if (message.type === "welcome") {
+      this.state = "connected";
       this.myId = message.playerId;
+      this.sessionToken = message.sessionToken;
+      this.roomCode = message.roomCode;
+      this.saveSession(message.sessionToken, message.roomCode);
+      this.pendingRoomAction = undefined;
+      this.clearPendingRoomAction();
     } else if (message.type === "snapshot") {
       this.room = message;
       this.game = message.game as AnyGameState | null;
       this.error = undefined;
     } else if (message.type === "error") {
       this.error = message.message;
+      if (this.pendingRoomAction) {
+        this.pendingRoomAction = undefined;
+        this.clearPendingRoomAction();
+      }
+      if (message.code === "session_expired") {
+        this.state = "connected";
+        this.sessionToken = undefined;
+        this.roomCode = undefined;
+        this.room = undefined;
+        this.game = null;
+        this.clearSession();
+      } else if (message.code === "room_closed") {
+        this.sessionToken = undefined;
+        this.roomCode = undefined;
+        this.room = undefined;
+        this.game = null;
+        this.clearSession();
+      }
+    } else if (message.type === "shutdown") {
+      this.state = "reconnecting";
+      this.reconnectDelay = Math.max(this.reconnectDelay, message.retryAfterMs);
     }
     this.emit();
+  }
+
+  private saveSession(token: string, roomCode: string): void {
+    try {
+      sessionStorage.setItem("redtea.session", JSON.stringify({ token, roomCode }));
+    } catch {
+      // Storage can be unavailable in private browsing; live reconnect still works.
+    }
+  }
+
+  private clearSession(): void {
+    try {
+      sessionStorage.removeItem("redtea.session");
+    } catch {}
+  }
+
+  private savePendingRoomAction(action: PendingRoomAction): void {
+    try {
+      sessionStorage.setItem("redtea.pendingRoomAction", JSON.stringify(action));
+    } catch {
+      // Storage can be unavailable; this request can still be retried within this page.
+    }
+  }
+
+  private clearPendingRoomAction(): void {
+    try {
+      sessionStorage.removeItem("redtea.pendingRoomAction");
+    } catch {}
   }
 
   start(_options: StartOptions): void {}
@@ -275,10 +384,21 @@ export class RemoteConnection extends BaseConnection {
     this.emit();
   }
   createRoom(name: string): void {
-    this.send({ type: "create_room", name });
+    this.pendingRoomAction = { type: "create_room", requestId: crypto.randomUUID(), name };
+    this.savePendingRoomAction(this.pendingRoomAction);
+    if (this.socket?.readyState === WebSocket.OPEN)
+      this.socket.send(JSON.stringify(this.pendingRoomAction));
   }
   joinRoom(code: string, name: string): void {
-    this.send({ type: "join_room", code: code.toUpperCase(), name });
+    this.pendingRoomAction = {
+      type: "join_room",
+      requestId: crypto.randomUUID(),
+      code: code.toUpperCase(),
+      name,
+    };
+    this.savePendingRoomAction(this.pendingRoomAction);
+    if (this.socket?.readyState === WebSocket.OPEN)
+      this.socket.send(JSON.stringify(this.pendingRoomAction));
   }
   setReady(ready: boolean): void {
     this.send({ type: "set_ready", ready });
@@ -290,8 +410,13 @@ export class RemoteConnection extends BaseConnection {
     this.send({ type: "start_game" });
   }
   close(): void {
+    this.manuallyClosed = true;
+    if (this.reconnectTimer !== undefined) window.clearTimeout(this.reconnectTimer);
     this.send({ type: "leave_room" });
-    this.socket.close();
+    this.clearSession();
+    this.clearPendingRoomAction();
+    this.socket?.close();
+    this.state = "disconnected";
     this.listeners.clear();
   }
 }

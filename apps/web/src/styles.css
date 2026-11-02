@@ -667,6 +667,26 @@ button {
 .lobby-content {
   margin-top: 16px;
 }
+.connection-notice,
+.join-countdown {
+  padding: 12px 14px;
+  border: 1px solid var(--tea-line);
+  border-radius: 10px;
+  background: var(--tea-accent-soft);
+  color: var(--tea-ink);
+}
+.join-countdown strong {
+  color: var(--tea-accent);
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.join-countdown p,
+.connection-notice {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
 .lobby-player-list {
   padding-left: 20px;
   line-height: 1.8;
