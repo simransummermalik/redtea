@@ -14,6 +14,7 @@
     "apps/server": {
       "name": "@redtea/server",
       "dependencies": {
+        "@redtea/engine": "workspace:*",
         "@redtea/protocol": "workspace:*",
       },
     },
@@ -21,6 +22,7 @@
       "name": "@redtea/web",
       "dependencies": {
         "@redtea/engine": "workspace:*",
+        "@redtea/protocol": "workspace:*",
         "solid-js": "^1.9.18",
       },
       "devDependencies": {
@@ -34,6 +36,7 @@
     "packages/protocol": {
       "name": "@redtea/protocol",
       "dependencies": {
+        "@redtea/engine": "workspace:*",
         "zod": "^4.6.7",
       },
     },

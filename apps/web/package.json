@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@redtea/engine": "workspace:*",
+    "@redtea/protocol": "workspace:*",
     "solid-js": "^1.9.18"
   },
   "devDependencies": {

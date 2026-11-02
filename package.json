@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "test": "bun test",
+    "dev": "bun run dev:server & bun run dev:web",
+    "dev:server": "bun --filter @redtea/server dev",
     "dev:web": "bun --filter @redtea/web dev",
     "build:web": "bun --filter @redtea/web build",
     "typecheck": "bun --filter '*' typecheck",

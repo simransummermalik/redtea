@@ -655,6 +655,43 @@ button {
   align-items: start;
   min-height: 62vh;
 }
+
+.lobby-card {
+  grid-column: 1 / -1;
+  padding: 22px;
+  border: 1px solid var(--tea-line);
+  border-radius: 14px;
+  background: var(--tea-surface);
+  box-shadow: var(--tea-shadow);
+}
+.lobby-content {
+  margin-top: 16px;
+}
+.lobby-player-list {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.lobby-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+.lobby-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lobby-controls input,
+.lobby-controls select,
+.lobby-content input {
+  padding: 9px 10px;
+  border: 1px solid var(--tea-line);
+  border-radius: 8px;
+  background: var(--tea-surface);
+  color: var(--tea-ink);
+}
 .setup-intro {
   padding-top: 22px;
 }

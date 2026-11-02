@@ -1,39 +1,31 @@
 import type {
-  AnyRoundGameState,
-  BlackEvent,
-  BlackGameState,
   BlackPlayerState,
   GamePlayer,
-  GreenConfig,
-  GreenEvent,
-  RedConfig,
-  RedEvent,
   RoundModeEffect,
-  RoundModeName,
   RoundResult,
   RoundSubmission,
-  YellowConfig,
-  YellowEvent,
 } from "@redtea/engine";
 import {
-  createBlackGame,
-  createGreenGame,
-  createRedGame,
-  createYellowGame,
   defaultBlackConfig,
   defaultGreenConfig,
   defaultRedConfig,
   defaultYellowConfig,
   getRoundTimeRemainingMs,
   getTimeRemainingMs,
-  step,
-  stepRoundGame,
 } from "@redtea/engine";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import {
+  type AnyGameState,
+  type GameConnection,
+  type GameMode,
+  LocalConnection,
+  RemoteConnection,
+  type RoomView,
+} from "./connection";
 import { loadWordCatalog } from "./gameData";
 import "./styles.css";
 
-type TeaMode = "black" | RoundModeName;
+type TeaMode = GameMode;
 type UiModeConfig = {
   botCount: number;
   botSkill: number;
@@ -42,7 +34,6 @@ type UiModeConfig = {
   allowWordReuse: boolean;
   ignoreInvalidWords: boolean;
 };
-type AnyGameState = BlackGameState | AnyRoundGameState;
 type SubmissionFeedItem = {
   id: number;
   playerId: string;
@@ -152,6 +143,11 @@ export function App() {
   const [mode, setMode] = createSignal<TeaMode>("green");
   const [configs, setConfigs] = createSignal(initialUiConfigs());
   const [game, setGame] = createSignal<AnyGameState | null>(null);
+  const [connection, setConnection] = createSignal<GameConnection>(new LocalConnection());
+  const [room, setRoom] = createSignal<RoomView | undefined>();
+  const [name, setName] = createSignal("Player");
+  const [roomCodeEntry, setRoomCodeEntry] = createSignal("");
+  const [lobbyError, setLobbyError] = createSignal("");
   const [entry, setEntry] = createSignal("");
   const [clock, setClock] = createSignal(0);
   const [feed, setFeed] = createSignal<SubmissionFeedItem[]>([]);
@@ -202,14 +198,85 @@ export function App() {
     if (items.length) setFeed((currentFeed) => [...items, ...currentFeed].slice(0, 40));
   }
 
-  function applyTransition(
-    nextState: AnyGameState,
-    effects: readonly (RoundModeEffect | { type: string; [key: string]: unknown })[],
-    now: number,
+  function activateRemote(): RemoteConnection {
+    const remote = new RemoteConnection();
+    connection().close();
+    setConnection(remote);
+    remote.subscribe((update) => {
+      setClock(update.now);
+      setGame(update.game);
+      setRoom(update.room);
+      setLobbyError(update.error ?? "");
+      if (update.effects.length) recordEffects(update.effects);
+    });
+    return remote;
+  }
+
+  function startRoomConnection(create: boolean): void {
+    setLobbyError("");
+    const remote = activateRemote();
+    if (create) remote.createRoom(name());
+    else remote.joinRoom(roomCodeEntry(), name());
+  }
+
+  function configureRoom(selected: TeaMode): void {
+    const settings = configs()[selected];
+    connection().configureRoom(
+      selected,
+      selectedEngineConfig(selected, settings),
+      settings.botCount,
+    );
+  }
+
+  function changeRoomSetting<K extends keyof UiModeConfig>(
+    selected: TeaMode,
+    key: K,
+    value: UiModeConfig[K],
   ): void {
-    setClock(now);
-    setGame(nextState);
-    recordEffects(effects);
+    const settings = { ...configs()[selected], [key]: value };
+    setConfigs((current) => ({ ...current, [selected]: settings }));
+    connection().configureRoom(
+      selected,
+      selectedEngineConfig(selected, settings),
+      settings.botCount,
+    );
+  }
+
+  function leaveRoom(): void {
+    connection().close();
+    const local = new LocalConnection();
+    setConnection(local);
+    setRoom(undefined);
+    setGame(null);
+    setFeed([]);
+    local.subscribe((update) => {
+      setClock(update.now);
+      setGame(update.game);
+    });
+  }
+
+  function backToSetup(): void {
+    if (room()) leaveRoom();
+    else setGame(null);
+  }
+
+  function selectedEngineConfig(
+    selected: TeaMode,
+    settings: UiModeConfig,
+  ): Record<string, number | boolean> {
+    if (selected === "black") return { initialTurnMs: settings.roundTimeMs };
+    const shared = {
+      botCount: settings.botCount,
+      pointsToWin: settings.pointsToWin,
+      roundTimeMs: settings.roundTimeMs,
+    };
+    if (selected === "green") return shared;
+    if (selected === "red") return { ...shared, allowWordReuse: settings.allowWordReuse };
+    return {
+      ...shared,
+      allowWordReuse: settings.allowWordReuse,
+      ignoreInvalidWords: settings.ignoreInvalidWords,
+    };
   }
 
   function startGame(): void {
@@ -219,62 +286,16 @@ export function App() {
     const settings = configs()[selected];
     const players = makePlayers(settings.botCount, settings.botSkill);
     const seed = crypto.getRandomValues(new Uint32Array(1))[0] ?? 1;
-    let created: AnyGameState;
-    if (selected === "black") {
-      created = createBlackGame({
-        players,
-        catalog,
-        seed,
-        config: { initialTurnMs: settings.roundTimeMs },
-      });
-    } else if (selected === "green") {
-      const config: Partial<GreenConfig> = {
-        botCount: settings.botCount,
-        pointsToWin: settings.pointsToWin,
-        roundTimeMs: settings.roundTimeMs,
-      };
-      created = createGreenGame({ players, catalog, seed, config });
-    } else if (selected === "red") {
-      const config: Partial<RedConfig> = {
-        botCount: settings.botCount,
-        pointsToWin: settings.pointsToWin,
-        roundTimeMs: settings.roundTimeMs,
-        allowWordReuse: settings.allowWordReuse,
-      };
-      created = createRedGame({ players, catalog, seed, config });
-    } else {
-      const config: Partial<YellowConfig> = {
-        botCount: settings.botCount,
-        pointsToWin: settings.pointsToWin,
-        roundTimeMs: settings.roundTimeMs,
-        allowWordReuse: settings.allowWordReuse,
-        ignoreInvalidWords: settings.ignoreInvalidWords,
-      };
-      created = createYellowGame({ players, catalog, seed, config });
-    }
-    const now = performance.now();
-    const started =
-      selected === "black"
-        ? step(created as BlackGameState, { type: "START" }, now)
-        : stepRoundGame(created as AnyRoundGameState, { type: "START" }, now);
-    setGame(started.state);
-    setClock(now);
+    connection().start({
+      mode: selected,
+      players,
+      catalog,
+      seed,
+      config: selectedEngineConfig(selected, settings),
+    });
     setEntry("");
     setFeed([]);
     requestAnimationFrame(() => inputRef?.focus());
-  }
-
-  function dispatch(event: BlackEvent | GreenEvent | RedEvent | YellowEvent): void {
-    const current = game();
-    if (!current) return;
-    const now = performance.now();
-    if (current.mode === "black") {
-      const result = step(current, event as BlackEvent, now);
-      applyTransition(result.state, result.effects, now);
-    } else {
-      const result = stepRoundGame(current, event as GreenEvent, now);
-      applyTransition(result.state, result.effects, now);
-    }
   }
 
   function submit(event: SubmitEvent): void {
@@ -284,14 +305,8 @@ export function App() {
     const text = entry().trim();
     if (!text) return;
     setEntry("");
-    if (current.mode === "black") {
-      if (current.currentPlayerId === "you")
-        dispatch({ type: "SUBMIT_WORD", playerId: "you", word: text });
-    } else if (current.mode === "yellow") {
-      dispatch({ type: "SUBMIT_MESSAGE", playerId: "you", message: text });
-    } else {
-      dispatch({ type: "SUBMIT_WORD", playerId: "you", word: text });
-    }
+    if (current.mode !== "black" || current.currentPlayerId === connection().playerId())
+      connection().submit(current.mode, text);
     requestAnimationFrame(() => inputRef?.focus());
   }
 
@@ -301,8 +316,18 @@ export function App() {
       .catch((error: unknown) =>
         setLoadError(error instanceof Error ? error.message : "Could not load the game dictionary"),
       );
-    const interval = window.setInterval(() => dispatch({ type: "TICK" }), 50);
-    onCleanup(() => window.clearInterval(interval));
+    const unsubscribe = connection().subscribe((update) => {
+      setClock(update.now);
+      setGame(update.game);
+      setRoom(update.room);
+      setLobbyError(update.error ?? "");
+      if (update.effects.length) recordEffects(update.effects);
+    });
+    const interval = window.setInterval(() => connection().tick(), 50);
+    onCleanup(() => {
+      window.clearInterval(interval);
+      unsubscribe();
+    });
   });
 
   const remainingMs = () => {
@@ -324,8 +349,9 @@ export function App() {
   const canHumanSubmit = () => {
     const current = game();
     if (current?.status !== "playing") return false;
-    if (current.mode === "black") return current.currentPlayerId === "you";
-    return current.mode === "green" || !current.submittedPlayerIds.includes("you");
+    const selfId = connection().playerId();
+    if (current.mode === "black") return current.currentPlayerId === selfId;
+    return current.mode === "green" || !current.submittedPlayerIds.includes(selfId);
   };
   const statusText = () => {
     const current = game();
@@ -385,7 +411,9 @@ export function App() {
             <div class="game-column">
               <div class="round-heading">
                 <div>
-                  <p class="eyebrow">Solo mode · {game()?.mode} Tea</p>
+                  <p class="eyebrow">
+                    {room() ? "Multiplayer room" : "Solo mode"} · {game()?.mode} Tea
+                  </p>
                   <h2>
                     {game()?.mode === "black" ? "Keep the word moving." : "Find your winning word."}
                   </h2>
@@ -507,7 +535,7 @@ export function App() {
               </form>
 
               <div class="game-actions">
-                <button class="restart-button" type="button" onClick={() => setGame(null)}>
+                <button class="restart-button" type="button" onClick={backToSetup}>
                   Back to setup
                 </button>
                 <p>
@@ -578,7 +606,9 @@ export function App() {
                           <strong>{player.name}</strong>
                           <small>
                             {player.kind === "human"
-                              ? "You"
+                              ? player.id === connection().playerId()
+                                ? "You"
+                                : "Player"
                               : `Skill ${Math.round(player.skill * 100)}%`}
                           </small>
                         </div>
@@ -655,6 +685,191 @@ export function App() {
         }
       >
         <section class="setup-layout" aria-label="Choose tea mode and game settings">
+          <section class="lobby-card" aria-label="Multiplayer room">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Play together</p>
+                <h3>Multiplayer room</h3>
+              </div>
+              <Show when={room()}>
+                <strong>Code {room()?.room.code}</strong>
+              </Show>
+            </div>
+            <Show
+              when={!room()}
+              fallback={
+                <div class="lobby-content">
+                  <p>
+                    Share code <strong>{room()?.room.code}</strong> with a friend.
+                  </p>
+                  <ul class="lobby-player-list">
+                    <For each={room()?.players ?? []}>
+                      {(player) => (
+                        <li>
+                          {player.name} {player.id === room()?.room.hostId ? "· host" : ""} ·{" "}
+                          {player.connected
+                            ? player.ready
+                              ? "ready"
+                              : "not ready"
+                            : "disconnected"}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <Show when={connection().playerId() !== room()?.room.hostId}>
+                    <button
+                      class="restart-button"
+                      type="button"
+                      onClick={() =>
+                        connection().setReady(
+                          !(
+                            room()?.players.find((player) => player.id === connection().playerId())
+                              ?.ready ?? false
+                          ),
+                        )
+                      }
+                    >
+                      {room()?.players.find((player) => player.id === connection().playerId())
+                        ?.ready
+                        ? "Not ready"
+                        : "Ready"}
+                    </button>
+                  </Show>
+                  <Show when={connection().playerId() === room()?.room.hostId}>
+                    <div class="lobby-controls">
+                      <label>
+                        Mode{" "}
+                        <select
+                          value={room()?.room.mode}
+                          onChange={(event) => {
+                            const next = event.currentTarget.value as TeaMode;
+                            setMode(next);
+                            configureRoom(next);
+                          }}
+                        >
+                          <For each={teaModes}>
+                            {(tea) => <option value={tea.id}>{tea.label}</option>}
+                          </For>
+                        </select>
+                      </label>
+                      <label>
+                        Bot seats{" "}
+                        <select
+                          value={room()?.room.botCount}
+                          onChange={(event) => {
+                            const bots = Number(event.currentTarget.value);
+                            updateConfig("botCount", bots);
+                            connection().configureRoom(
+                              room()?.room.mode ?? mode(),
+                              selectedEngineConfig(room()?.room.mode ?? mode(), {
+                                ...configs()[room()?.room.mode ?? mode()],
+                                botCount: bots,
+                              }),
+                              bots,
+                            );
+                          }}
+                        >
+                          <option value="0">0</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                        </select>
+                      </label>
+                      <Show when={(room()?.room.mode ?? mode()) !== "black"}>
+                        <label>
+                          Points to win{" "}
+                          <input
+                            type="number"
+                            min="1"
+                            max="99"
+                            value={configs()[room()?.room.mode ?? mode()].pointsToWin}
+                            onChange={(event) =>
+                              changeRoomSetting(
+                                room()?.room.mode ?? mode(),
+                                "pointsToWin",
+                                Math.max(1, Number(event.currentTarget.value) || 1),
+                              )
+                            }
+                          />
+                        </label>
+                      </Show>
+                      <label>
+                        Seconds per turn/round{" "}
+                        <input
+                          type="number"
+                          min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
+                          max="120"
+                          value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
+                          onChange={(event) =>
+                            changeRoomSetting(
+                              room()?.room.mode ?? mode(),
+                              "roundTimeMs",
+                              Math.max(
+                                (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
+                                Number(event.currentTarget.value) * 1_000 || 1_000,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                      <button
+                        class="submit-button"
+                        type="button"
+                        onClick={() => connection().startRoom()}
+                      >
+                        Start game
+                      </button>
+                    </div>
+                  </Show>
+                  <button class="restart-button" type="button" onClick={leaveRoom}>
+                    Leave room
+                  </button>
+                </div>
+              }
+            >
+              <div class="lobby-content">
+                <label class="setting-control">
+                  <span>
+                    <strong>Your name</strong>
+                  </span>
+                  <input
+                    value={name()}
+                    maxlength="24"
+                    onInput={(event) => setName(event.currentTarget.value)}
+                  />
+                </label>
+                <div class="lobby-controls">
+                  <button
+                    class="submit-button"
+                    type="button"
+                    onClick={() => startRoomConnection(true)}
+                  >
+                    Create room
+                  </button>
+                  <input
+                    aria-label="Room code"
+                    placeholder="Room code"
+                    maxlength="5"
+                    value={roomCodeEntry()}
+                    onInput={(event) => setRoomCodeEntry(event.currentTarget.value.toUpperCase())}
+                  />
+                  <button
+                    class="restart-button"
+                    type="button"
+                    disabled={roomCodeEntry().length !== 5}
+                    onClick={() => startRoomConnection(false)}
+                  >
+                    Join
+                  </button>
+                </div>
+              </div>
+            </Show>
+            <Show when={lobbyError()}>
+              <p class="feedback" role="alert">
+                {lobbyError()}
+              </p>
+            </Show>
+          </section>
           <div class="setup-intro">
             <p class="eyebrow">Choose your brew</p>
             <h2>
