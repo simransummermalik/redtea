@@ -12,6 +12,7 @@
     "dev:server": "bun --filter @redtea/server dev",
     "dev:web": "bun --filter @redtea/web dev",
     "build:web": "bun --filter @redtea/web build",
+    "load:server": "bun apps/server/scripts/load.ts",
     "typecheck": "bun --filter '*' typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",

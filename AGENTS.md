@@ -25,9 +25,12 @@ Keep dependencies minimal and document why each new dependency is needed.
 
 - Server messages use full snapshots rather than deltas. This keeps room entry and later reconnect support simple. Snapshots omit catalogs, RNG state, and planned bot actions.
 - During a Yellow round, all message contents and scores are hidden until the round resolves.
-- The version 1 client messages are `hello`, `create_room`, `join_room`, `set_ready`, `configure_room`, `start_game`, `submit_word`, `submit_message`, and `leave_room`. Server messages are `hello`, `welcome`, `snapshot`, and `error`.
-- Black turns for disconnected players continue to their normal timeout, including its HP penalty. Disconnected players remain seated through Green, Red, and Yellow rounds and make no submissions. If the host disconnects, the next connected human by join order becomes host.
-- Green uses server receipt time, so lower network latency can provide a small advantage. A short server-side grace window is a possible later mitigation.
+- Protocol version 2 keeps the v1 actions, adds session resumption through optional `sessionToken` on `hello`, and adds `requestId` to room create/join actions so a retry after a lost `welcome` reclaims the same seat. `welcome` returns the rotated token. Snapshots include the `countdown` phase and `countdownEndsAt`; `shutdown` asks clients to reconnect after deploy shutdown. Reject incompatible protocol versions.
+- The browser keeps the session token in `sessionStorage`, scoped to its tab and lifetime. This restores seats after reloads while avoiding a bearer credential that persists across browser restarts. Reconnect does not reset game timers or reveal additional state. Yellow submission contents and scores remain hidden until the round resolves.
+- A disconnected seat is reserved during the configurable reconnect grace period. Black turns continue to their normal timeout and take the usual HP penalty. During Green, Red, and Yellow, disconnected players simply make no submissions and are not eliminated. Reconnecting players recover the same seat and full current snapshot in every mode.
+- When the host remains disconnected past grace, promote the connected human with the earliest join order. Only the host can change configuration or start a game. A host start opens a 10-second join countdown; all supported modes require at least two participants when it resolves.
+- If all humans disconnect, close the room after the configured empty-room timeout. Idle rooms also expire. Rooms and sessions are in memory, so a deploy or process restart ends all rooms.
+- Green uses server receipt time, so lower network latency can provide a small advantage. Reconnect preserves the current deadline and fragment and does not restore time already spent offline.
 - The server uses Bun's native HTTP and WebSocket APIs. Zod is already a protocol dependency; avoid adding runtime dependencies without need.
 
 ## Commands
