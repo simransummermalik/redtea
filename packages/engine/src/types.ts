@@ -5,8 +5,9 @@ export interface PlayerDelta {
   hp: number;
 }
 
-export interface ModeStrategy<State, Submission, Resolution, Effect> {
-  startRound(state: State, now: number): { state: State; effects: Effect[] };
-  submit(state: State, submission: Submission, now: number): { state: State; effects: Effect[] };
+export interface ModeStrategy<State, Event, RoundResult, Resolution, Effect> {
+  start(state: State, now: number): { state: State; effects: Effect[] };
+  step(state: State, event: Event, now: number): { state: State; effects: Effect[] };
+  latestRoundResult(state: State): RoundResult | null;
   resolve(state: State, now: number): Resolution | null;
 }

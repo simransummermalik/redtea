@@ -76,6 +76,7 @@ export interface BlackGameState {
   usedWords: string[];
   winnerId: PlayerId | null;
   lastFeedback: BlackFeedback | null;
+  lastRoundResult: BlackRoundResult | null;
   botAction: BotAction | null;
   rngState: number;
 }
@@ -97,6 +98,21 @@ export interface BlackResolution {
   winnerId: PlayerId;
   deltas: Readonly<Record<PlayerId, PlayerDelta>>;
   usedWords: readonly string[];
+}
+
+export interface BlackRoundResult {
+  round: number;
+  fragment: string;
+  winnerId: PlayerId | null;
+  submissions: readonly {
+    playerId: PlayerId;
+    text: string;
+    submittedAt: number;
+    validWords: readonly string[];
+    invalidWords: readonly string[];
+    score: number;
+  }[];
+  deltas: Readonly<Record<PlayerId, number>>;
 }
 
 export function createWordCatalog(
@@ -172,6 +188,7 @@ export function createBlackGame(options: CreateBlackGameOptions): BlackGameState
     usedWords: [],
     winnerId: null,
     lastFeedback: null,
+    lastRoundResult: null,
     botAction: null,
     rngState: options.seed >>> 0,
   };
@@ -368,6 +385,24 @@ function acceptWord(
     players,
     usedWords: [...state.usedWords, word],
     lastFeedback: { kind: "valid" as const, playerId, word },
+    lastRoundResult: {
+      round: state.turnNumber,
+      fragment: state.fragment ?? "",
+      winnerId: playerId,
+      submissions: [
+        {
+          playerId,
+          text: word,
+          submittedAt: now,
+          validWords: [word],
+          invalidWords: [],
+          score: state.config.pointsPerWord,
+        },
+      ],
+      deltas: Object.fromEntries(
+        state.players.map(({ id }) => [id, id === playerId ? state.config.pointsPerWord : 0]),
+      ),
+    } satisfies BlackRoundResult,
     botAction: null,
   };
   effects.push({ type: "word-accepted", playerId, word });
@@ -387,7 +422,19 @@ function expireTurn(state: BlackGameState, now: number, effects: BlackEffect[]):
   const feedback: BlackFeedback = didEliminate
     ? { kind: "eliminated", playerId }
     : { kind: "timeout", playerId };
-  const next = { ...state, players, lastFeedback: feedback, botAction: null };
+  const next = {
+    ...state,
+    players,
+    lastFeedback: feedback,
+    lastRoundResult: {
+      round: state.turnNumber,
+      fragment: state.fragment ?? "",
+      winnerId: null,
+      submissions: [],
+      deltas: Object.fromEntries(state.players.map(({ id }) => [id, 0])),
+    } satisfies BlackRoundResult,
+    botAction: null,
+  };
   return completeTurn(next, playerId, now, effects);
 }
 
@@ -459,13 +506,19 @@ function handleTick(
 
 export const blackTeaMode: ModeStrategy<
   BlackGameState,
-  BlackSubmission,
+  BlackEvent,
+  BlackRoundResult,
   BlackResolution,
   BlackEffect
 > & {
   startRound: typeof startRound;
   submit: typeof submit;
 } = {
+  start: startRound,
+  step,
+  latestRoundResult(state) {
+    return state.lastRoundResult;
+  },
   startRound,
   submit,
   resolve(state) {
