@@ -324,8 +324,7 @@ export function App() {
   }
 
   function backToSetup(): void {
-    if (room()) leaveRoom();
-    else setGame(null);
+    leaveRoom();
   }
 
   function selectedEngineConfig(
