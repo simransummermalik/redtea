@@ -10,15 +10,16 @@ import type {
 import {
   defaultBlackConfig,
   defaultGreenConfig,
+  defaultMixConfig,
   defaultRedConfig,
   defaultYellowConfig,
-  defaultMixConfig,
   getRoundTimeRemainingMs,
   getTimeRemainingMs,
   mixTimeRemainingMs,
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import redTeaFox from "./assets/red-tea-fox.svg";
 import {
   type AnyGameState,
   type GameConnection,
@@ -87,6 +88,42 @@ const teaModes: { id: TeaMode; label: string; title: string; desc: string; glyph
     glyph: "≋",
   },
 ];
+
+const teaHowItWorks: Record<
+  TeaMode,
+  { eyebrow: string; heading: string; body: string; rule: string }
+> = {
+  red: {
+    eyebrow: "Longest word wins",
+    heading: "Find the longest word.",
+    body: "A fragment appears. Type a valid word that contains it before the timer runs out. The longest answer at the end of the round takes the point.",
+    rule: "Ties go to the earliest submission.",
+  },
+  black: {
+    eyebrow: "Take turns",
+    heading: "Keep the word moving.",
+    body: "The turn passes around the table. Submit a word that contains the fragment before the timer expires, or lose a heart. Miss twice and you are out.",
+    rule: "No word can be used twice.",
+  },
+  green: {
+    eyebrow: "Race the clock",
+    heading: "Be first with a valid word.",
+    body: "Everyone sees the same fragment. The first player to send a valid answer wins the round, so trust your instincts and type fast.",
+    rule: "The first valid answer takes the point.",
+  },
+  yellow: {
+    eyebrow: "Make a list",
+    heading: "Pack one message with words.",
+    body: "Send one message containing as many valid words as you can find. When the round closes, every word is checked and the best list wins.",
+    rule: "Repeated words only count once.",
+  },
+  mix: {
+    eyebrow: "Let the kettle decide",
+    heading: "A new tea every round.",
+    body: "Mix pulls from the other tea modes as you play. The rules, pace, and kind of challenge can change between rounds.",
+    rule: "At least two players are needed for Mix.",
+  },
+};
 
 function makePlayers(botCount: number, skill: number): GamePlayer[] {
   return [
@@ -164,7 +201,8 @@ function seconds(milliseconds: number): string {
 }
 
 export function App() {
-  const [mode, setMode] = createSignal<TeaMode>("green");
+  const [mode, setMode] = createSignal<TeaMode>("red");
+  const [showModeIntro, setShowModeIntro] = createSignal(true);
   const [configs, setConfigs] = createSignal(initialUiConfigs());
   const [game, setGame] = createSignal<AnyGameState | null>(null);
   const [connection, setConnection] = createSignal<GameConnection>(new LocalConnection());
@@ -232,6 +270,7 @@ export function App() {
       setClock(update.now);
       setGame(update.game);
       setRoom(update.room);
+      if (update.room) setShowModeIntro(false);
       setLobbyError(update.error ?? "");
       setConnectionState(update.connectionState);
       if (update.effects.length) recordEffects(update.effects);
@@ -537,23 +576,29 @@ export function App() {
   };
 
   return (
-    <main class="page" data-tea={teaTheme()}>
-      <header class="topbar">
-        <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">
-            ✳
-          </span>
-          <div>
-            <p class="eyebrow">A word game steeped in speed</p>
-            <h1>Redtea</h1>
+    <main
+      class="page"
+      classList={{ "mode-intro-page": !game() && showModeIntro() && !room() }}
+      data-tea={teaTheme()}
+    >
+      <Show when={game() || !showModeIntro() || room()}>
+        <header class="topbar">
+          <div class="brand-lockup">
+            <span class="brand-mark" aria-hidden="true">
+              ✳
+            </span>
+            <div>
+              <p class="eyebrow">A word game steeped in speed</p>
+              <h1>Redtea</h1>
+            </div>
           </div>
-        </div>
-        <div class="theme-strip" role="img" aria-label="Tea mode palettes">
-          <For each={teaModes}>
-            {(tea) => <span class={`theme-dot ${tea.id}`} title={`${tea.label} tea`} />}
-          </For>
-        </div>
-      </header>
+          <div class="theme-strip" role="img" aria-label="Tea mode palettes">
+            <For each={teaModes}>
+              {(tea) => <span class={`theme-dot ${tea.id}`} title={`${tea.label} tea`} />}
+            </For>
+          </div>
+        </header>
+      </Show>
 
       <Show
         when={!game()}
@@ -855,569 +900,640 @@ export function App() {
           </section>
         }
       >
-        <section class="setup-layout" aria-label="Choose tea mode and game settings">
-          <section class="lobby-card" aria-label="Multiplayer room">
-            <div class="card-heading">
-              <div>
-                <p class="eyebrow">Play together</p>
-                <h3>Multiplayer room</h3>
+        <Show when={showModeIntro() && !room()}>
+          <section class="mode-intro-screen" aria-label={`${mode()} tea introduction`}>
+            <div class="mode-intro-content">
+              <h1 class="mode-intro-title">
+                <span class="mode-selector">
+                  <select
+                    aria-label="Choose tea mode"
+                    value={mode()}
+                    onChange={(event) => setMode(event.currentTarget.value as TeaMode)}
+                  >
+                    <For each={teaModes}>
+                      {(tea) => <option value={tea.id}>{tea.label} Tea</option>}
+                    </For>
+                  </select>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="m5 7.5 5 5 5-5" />
+                  </svg>
+                </span>
+              </h1>
+              <div class="mode-intro-art" aria-hidden="true">
+                <Show
+                  when={mode() === "red"}
+                  fallback={
+                    <div class={`mode-art-symbol ${mode()}`}>
+                      {teaModes.find((tea) => tea.id === mode())?.glyph}
+                    </div>
+                  }
+                >
+                  <img
+                    class="red-tea-fox"
+                    src={redTeaFox}
+                    width="680"
+                    height="490"
+                    alt="A fox sitting and sipping red tea"
+                  />
+                </Show>
               </div>
-              <Show when={room()}>
-                <strong>Code {room()?.room.code}</strong>
-              </Show>
+              <section class="how-it-works-card">
+                <h2 class="how-it-works-label">How this works</h2>
+                <p class="how-it-works-body">{teaHowItWorks[mode()].body}</p>
+              </section>
+              <button class="continue-button" type="button" onClick={() => setShowModeIntro(false)}>
+                Continue to settings <span aria-hidden="true">→</span>
+              </button>
             </div>
-            <Show
-              when={!room()}
-              fallback={
+          </section>
+        </Show>
+        <Show when={!showModeIntro() || room()}>
+          <section class="setup-layout" aria-label="Choose tea mode and game settings">
+            <section class="lobby-card" aria-label="Multiplayer room">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">Play together</p>
+                  <h3>Multiplayer room</h3>
+                </div>
+                <Show when={room()}>
+                  <strong>Code {room()?.room.code}</strong>
+                </Show>
+              </div>
+              <Show
+                when={!room()}
+                fallback={
+                  <div class="lobby-content">
+                    <p>
+                      Share code <strong>{room()?.room.code}</strong> with a friend.
+                    </p>
+                    <Show when={connectionState() === "reconnecting"}>
+                      <p class="connection-notice" role="status">
+                        Reconnecting… your current input stays on this device.
+                      </p>
+                    </Show>
+                    <Show when={room()?.room.phase === "countdown"}>
+                      <div class="join-countdown" role="status" aria-live="polite">
+                        <strong>
+                          Join window ·{" "}
+                          {Math.max(
+                            0,
+                            Math.ceil(
+                              ((room()?.room.countdownEndsAt ?? clock()) - clock()) / 1_000,
+                            ),
+                          )}
+                          s
+                        </strong>
+                        <p>There’s still time to pull up a seat.</p>
+                      </div>
+                    </Show>
+                    <ul class="lobby-player-list">
+                      <For each={room()?.players ?? []}>
+                        {(player) => (
+                          <li>
+                            {player.name} {player.id === room()?.room.hostId ? "· host" : ""} ·{" "}
+                            {player.connected
+                              ? player.ready
+                                ? "ready"
+                                : "not ready"
+                              : "disconnected"}
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                    <Show when={connection().playerId() !== room()?.room.hostId}>
+                      <button
+                        class="restart-button"
+                        type="button"
+                        disabled={connectionState() !== "connected"}
+                        onClick={() =>
+                          connection().setReady(
+                            !(
+                              room()?.players.find(
+                                (player) => player.id === connection().playerId(),
+                              )?.ready ?? false
+                            ),
+                          )
+                        }
+                      >
+                        {room()?.players.find((player) => player.id === connection().playerId())
+                          ?.ready
+                          ? "Not ready"
+                          : "Ready"}
+                      </button>
+                    </Show>
+                    <Show when={connection().playerId() === room()?.room.hostId}>
+                      <div class="lobby-controls">
+                        <label>
+                          Mode{" "}
+                          <select
+                            value={room()?.room.mode}
+                            disabled={connectionState() !== "connected"}
+                            onChange={(event) => {
+                              const next = event.currentTarget.value as TeaMode;
+                              setMode(next);
+                              configureRoom(next);
+                            }}
+                          >
+                            <For each={teaModes}>
+                              {(tea) => <option value={tea.id}>{tea.label}</option>}
+                            </For>
+                          </select>
+                        </label>
+                        <label>
+                          Bot seats{" "}
+                          <select
+                            value={room()?.room.botCount}
+                            disabled={connectionState() !== "connected"}
+                            onChange={(event) => {
+                              const bots = Number(event.currentTarget.value);
+                              updateConfig("botCount", bots);
+                              connection().configureRoom(
+                                room()?.room.mode ?? mode(),
+                                selectedEngineConfig(room()?.room.mode ?? mode(), {
+                                  ...configs()[room()?.room.mode ?? mode()],
+                                  botCount: bots,
+                                }),
+                                bots,
+                              );
+                            }}
+                          >
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                          </select>
+                        </label>
+                        <Show
+                          when={
+                            (room()?.room.mode ?? mode()) !== "black" &&
+                            (room()?.room.mode ?? mode()) !== "mix"
+                          }
+                        >
+                          <label>
+                            Points to win{" "}
+                            <input
+                              type="number"
+                              disabled={connectionState() !== "connected"}
+                              min="1"
+                              max="99"
+                              value={configs()[room()?.room.mode ?? mode()].pointsToWin}
+                              onChange={(event) =>
+                                changeRoomSetting(
+                                  room()?.room.mode ?? mode(),
+                                  "pointsToWin",
+                                  Math.max(1, Number(event.currentTarget.value) || 1),
+                                )
+                              }
+                            />
+                          </label>
+                        </Show>
+                        <Show when={(room()?.room.mode ?? mode()) !== "mix"}>
+                          <label>
+                            Seconds per turn/round{" "}
+                            <input
+                              type="number"
+                              disabled={connectionState() !== "connected"}
+                              min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
+                              max="120"
+                              value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
+                              onChange={(event) =>
+                                changeRoomSetting(
+                                  room()?.room.mode ?? mode(),
+                                  "roundTimeMs",
+                                  Math.max(
+                                    (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
+                                    Number(event.currentTarget.value) * 1_000 || 1_000,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                        </Show>
+                        <Show
+                          when={
+                            (room()?.room.mode ?? mode()) === "mix" &&
+                            (room()?.players.filter(
+                              (player) => player.connected && player.kind === "human",
+                            ).length ?? 0) +
+                              (room()?.room.botCount ?? 0) <
+                              2
+                          }
+                        >
+                          <p class="feedback" role="status">
+                            Mix needs at least two connected players or bots. Add a player or a bot
+                            before starting.
+                          </p>
+                        </Show>
+                        <button
+                          class="submit-button"
+                          type="button"
+                          onClick={() => connection().startRoom()}
+                          disabled={
+                            room()?.room.phase === "countdown" ||
+                            connectionState() !== "connected" ||
+                            ((room()?.room.mode ?? mode()) === "mix" &&
+                              (room()?.players.filter(
+                                (player) => player.connected && player.kind === "human",
+                              ).length ?? 0) +
+                                (room()?.room.botCount ?? 0) <
+                                2)
+                          }
+                        >
+                          {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game"}
+                        </button>
+                      </div>
+                    </Show>
+                    <button class="restart-button" type="button" onClick={leaveRoom}>
+                      Leave room
+                    </button>
+                  </div>
+                }
+              >
                 <div class="lobby-content">
-                  <p>
-                    Share code <strong>{room()?.room.code}</strong> with a friend.
-                  </p>
                   <Show when={connectionState() === "reconnecting"}>
                     <p class="connection-notice" role="status">
-                      Reconnecting… your current input stays on this device.
+                      Reconnecting to your room…
                     </p>
                   </Show>
-                  <Show when={room()?.room.phase === "countdown"}>
-                    <div class="join-countdown" role="status" aria-live="polite">
-                      <strong>
-                        Join window ·{" "}
-                        {Math.max(
-                          0,
-                          Math.ceil(((room()?.room.countdownEndsAt ?? clock()) - clock()) / 1_000),
-                        )}
-                        s
-                      </strong>
-                      <p>There’s still time to pull up a seat.</p>
-                    </div>
-                  </Show>
-                  <ul class="lobby-player-list">
-                    <For each={room()?.players ?? []}>
-                      {(player) => (
-                        <li>
-                          {player.name} {player.id === room()?.room.hostId ? "· host" : ""} ·{" "}
-                          {player.connected
-                            ? player.ready
-                              ? "ready"
-                              : "not ready"
-                            : "disconnected"}
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                  <Show when={connection().playerId() !== room()?.room.hostId}>
+                  <label class="setting-control">
+                    <span>
+                      <strong>Your name</strong>
+                    </span>
+                    <input
+                      value={name()}
+                      maxlength="24"
+                      onInput={(event) => setName(event.currentTarget.value)}
+                    />
+                  </label>
+                  <div class="lobby-controls">
+                    <button
+                      class="submit-button"
+                      type="button"
+                      disabled={connectionState() !== "connected"}
+                      onClick={() => startRoomConnection(true)}
+                    >
+                      Create room
+                    </button>
+                    <input
+                      aria-label="Room code"
+                      disabled={connectionState() !== "connected"}
+                      placeholder="Room code"
+                      maxlength="5"
+                      value={roomCodeEntry()}
+                      onInput={(event) => setRoomCodeEntry(event.currentTarget.value.toUpperCase())}
+                    />
                     <button
                       class="restart-button"
                       type="button"
-                      disabled={connectionState() !== "connected"}
-                      onClick={() =>
-                        connection().setReady(
-                          !(
-                            room()?.players.find((player) => player.id === connection().playerId())
-                              ?.ready ?? false
-                          ),
+                      disabled={roomCodeEntry().length !== 5 || connectionState() !== "connected"}
+                      onClick={() => startRoomConnection(false)}
+                    >
+                      Join
+                    </button>
+                  </div>
+                </div>
+              </Show>
+              <Show when={lobbyError()}>
+                <p class="feedback" role="alert">
+                  {lobbyError()}
+                </p>
+              </Show>
+            </section>
+            <div class="setup-intro">
+              <p class="eyebrow">Choose your brew</p>
+              <h2>
+                Pick a mode.
+                <br />
+                <em>Play a quick round.</em>
+              </h2>
+              <p class="setup-copy">
+                Five quick word games. Race the clock, outscore the table, or let the kettle choose.
+              </p>
+            </div>
+            <div class="setup-panel">
+              <div class="setup-panel-heading">
+                <div>
+                  <p class="eyebrow">The main event</p>
+                  <h3>Choose how the table plays</h3>
+                </div>
+                <span class="selected-mode-badge">
+                  <span class={`theme-dot ${mode()}`} />
+                  {mode()[0]?.toUpperCase()}
+                  {mode().slice(1)} Tea
+                </span>
+              </div>
+              <div class="mode-grid">
+                <For each={teaModes}>
+                  {(tea) => (
+                    <button
+                      type="button"
+                      class={`mode-card ${mode() === tea.id ? "selected" : ""}`}
+                      onClick={() => setMode(tea.id)}
+                      aria-pressed={mode() === tea.id}
+                    >
+                      <span class="mode-glyph">{tea.glyph}</span>
+                      <span>
+                        <strong>{tea.label} Tea</strong>
+                        <small>{tea.desc}</small>
+                      </span>
+                      <i>{mode() === tea.id ? "✓" : ""}</i>
+                    </button>
+                  )}
+                </For>
+              </div>
+              <div class="settings-divider">
+                <span>Fine tune the table</span>
+                <small>Optional</small>
+              </div>
+              <div class="config-grid">
+                <label class="setting-control">
+                  <span>
+                    <strong>Tea bots</strong>
+                    <small>Compete against 1 to 3 bots</small>
+                  </span>
+                  <select
+                    value={config().botCount}
+                    onChange={(event) =>
+                      updateConfig("botCount", Number(event.currentTarget.value))
+                    }
+                  >
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                  </select>
+                </label>
+                <label class="setting-control skill-control">
+                  <span>
+                    <strong>Bot skill</strong>
+                    <small>Speed and word choice</small>
+                  </span>
+                  <output>{Math.round(config().botSkill * 100)}%</output>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={config().botSkill}
+                    onInput={(event) => updateConfig("botSkill", Number(event.currentTarget.value))}
+                  />
+                </label>
+                <Show when={mode() !== "black" && mode() !== "mix"}>
+                  <label class="setting-control">
+                    <span>
+                      <strong>Points to win</strong>
+                      <small>{mode() === "green" ? "Default: 30" : "Default: 4"}</small>
+                    </span>
+                    <input
+                      class="number-setting"
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={config().pointsToWin}
+                      onInput={(event) =>
+                        updateConfig(
+                          "pointsToWin",
+                          Math.max(1, Number(event.currentTarget.value) || 1),
                         )
                       }
-                    >
-                      {room()?.players.find((player) => player.id === connection().playerId())
-                        ?.ready
-                        ? "Not ready"
-                        : "Ready"}
-                    </button>
-                  </Show>
-                  <Show when={connection().playerId() === room()?.room.hostId}>
-                    <div class="lobby-controls">
-                      <label>
-                        Mode{" "}
-                        <select
-                          value={room()?.room.mode}
-                          disabled={connectionState() !== "connected"}
-                          onChange={(event) => {
-                            const next = event.currentTarget.value as TeaMode;
-                            setMode(next);
-                            configureRoom(next);
-                          }}
-                        >
-                          <For each={teaModes}>
-                            {(tea) => <option value={tea.id}>{tea.label}</option>}
-                          </For>
-                        </select>
-                      </label>
-                      <label>
-                        Bot seats{" "}
-                        <select
-                          value={room()?.room.botCount}
-                          disabled={connectionState() !== "connected"}
-                          onChange={(event) => {
-                            const bots = Number(event.currentTarget.value);
-                            updateConfig("botCount", bots);
-                            connection().configureRoom(
-                              room()?.room.mode ?? mode(),
-                              selectedEngineConfig(room()?.room.mode ?? mode(), {
-                                ...configs()[room()?.room.mode ?? mode()],
-                                botCount: bots,
-                              }),
-                              bots,
-                            );
-                          }}
-                        >
-                          <option value="0">0</option>
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                          <option value="3">3</option>
-                        </select>
-                      </label>
-                      <Show
-                        when={
-                          (room()?.room.mode ?? mode()) !== "black" &&
-                          (room()?.room.mode ?? mode()) !== "mix"
+                    />
+                  </label>
+                </Show>
+                <Show when={mode() !== "mix"}>
+                  <label class="setting-control">
+                    <span>
+                      <strong>{mode() === "black" ? "Turn time" : "Time per round"}</strong>
+                      <small>Seconds before the round moves on</small>
+                    </span>
+                    <span class="time-setting">
+                      <input
+                        class="number-setting"
+                        type="number"
+                        min={mode() === "black" ? 5 : 1}
+                        max="120"
+                        value={config().roundTimeMs / 1_000}
+                        onInput={(event) =>
+                          updateConfig(
+                            "roundTimeMs",
+                            Math.max(
+                              mode() === "black" ? 5_000 : 1_000,
+                              Number(event.currentTarget.value) * 1_000 || 1_000,
+                            ),
+                          )
                         }
-                      >
-                        <label>
-                          Points to win{" "}
+                      />
+                      <small>sec</small>
+                    </span>
+                  </label>
+                </Show>
+                <Show when={mode() === "red" || mode() === "yellow"}>
+                  <label class="check-setting">
+                    <input
+                      type="checkbox"
+                      checked={config().allowWordReuse}
+                      onChange={(event) =>
+                        updateConfig("allowWordReuse", event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      <strong>Allow word reuse</strong>
+                      <small>Words used in earlier rounds are allowed</small>
+                    </span>
+                  </label>
+                </Show>
+                <Show when={mode() === "yellow"}>
+                  <label class="check-setting">
+                    <input
+                      type="checkbox"
+                      checked={config().ignoreInvalidWords}
+                      onChange={(event) =>
+                        updateConfig("ignoreInvalidWords", event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      <strong>Ignore invalid words</strong>
+                      <small>Turn off to subtract one per invalid word</small>
+                    </span>
+                  </label>
+                </Show>
+                <Show when={mode() === "mix"}>
+                  <label class="setting-control">
+                    <span>
+                      <strong>Points to win</strong>
+                      <small>First to this score wins</small>
+                    </span>
+                    <input
+                      class="number-setting"
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={config().mixConfig?.pointsToWin ?? 4}
+                      onInput={(event) =>
+                        changeMixSetting(
+                          "pointsToWin",
+                          Math.max(1, Number(event.currentTarget.value) || 1),
+                        )
+                      }
+                    />
+                  </label>
+                  <label class="setting-control">
+                    <span>
+                      <strong>Base HP</strong>
+                      <small>Misses before elimination</small>
+                    </span>
+                    <input
+                      class="number-setting"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={config().mixConfig?.baseHp ?? 2}
+                      onInput={(event) =>
+                        changeMixSetting(
+                          "baseHp",
+                          Math.max(1, Number(event.currentTarget.value) || 1),
+                        )
+                      }
+                    />
+                  </label>
+                  <label class="setting-control">
+                    <span>
+                      <strong>Default round time</strong>
+                      <small>Tea-specific times can override this</small>
+                    </span>
+                    <input
+                      class="number-setting"
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={(config().mixConfig?.roundTimeMs ?? 10_000) / 1_000}
+                      onInput={(event) =>
+                        changeMixSetting(
+                          "roundTimeMs",
+                          Math.max(1_000, Number(event.currentTarget.value) * 1_000 || 1_000),
+                        )
+                      }
+                    />
+                  </label>
+                  <label class="check-setting">
+                    <input
+                      type="checkbox"
+                      checked={config().mixConfig?.avoidImmediateRepeat ?? true}
+                      onChange={(event) =>
+                        changeMixSetting("avoidImmediateRepeat", event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      <strong>Avoid back-to-back repeats</strong>
+                      <small>Unless only one tea is enabled</small>
+                    </span>
+                  </label>
+                  <label class="check-setting">
+                    <input
+                      type="checkbox"
+                      checked={config().mixConfig?.reuseWordsPerTea ?? false}
+                      onChange={(event) =>
+                        changeMixSetting("reuseWordsPerTea", event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      <strong>Keep separate word history per tea</strong>
+                      <small>Off: a word used in any tea stays used for the whole game</small>
+                    </span>
+                  </label>
+                  <For each={["black", "green", "red", "yellow"] as const}>
+                    {(tea) => (
+                      <div class="mix-tea-setting">
+                        <label class="check-setting">
                           <input
-                            type="number"
-                            disabled={connectionState() !== "connected"}
-                            min="1"
-                            max="99"
-                            value={configs()[room()?.room.mode ?? mode()].pointsToWin}
+                            type="checkbox"
+                            checked={config().mixConfig?.[`${tea}Enabled`] ?? true}
+                            disabled={mixTeaCannotBeDisabled(tea)}
                             onChange={(event) =>
-                              changeRoomSetting(
-                                room()?.room.mode ?? mode(),
-                                "pointsToWin",
-                                Math.max(1, Number(event.currentTarget.value) || 1),
-                              )
+                              changeMixSetting(`${tea}Enabled`, event.currentTarget.checked)
                             }
                           />
+                          <span>
+                            <strong>
+                              {tea[0]?.toUpperCase()}
+                              {tea.slice(1)} Tea
+                            </strong>
+                            <small>
+                              {tea === "black" ? "Bomb sequence" : "Round winner scores points"}
+                            </small>
+                          </span>
                         </label>
-                      </Show>
-                      <Show when={(room()?.room.mode ?? mode()) !== "mix"}>
-                        <label>
-                          Seconds per turn/round{" "}
+                        <label class="setting-control">
+                          <span>
+                            <strong>Time (seconds)</strong>
+                          </span>
                           <input
+                            class="number-setting"
                             type="number"
-                            disabled={connectionState() !== "connected"}
-                            min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
+                            min={tea === "black" ? 5 : 1}
                             max="120"
-                            value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
-                            onChange={(event) =>
-                              changeRoomSetting(
-                                room()?.room.mode ?? mode(),
-                                "roundTimeMs",
+                            value={
+                              ((config().mixConfig?.[`${tea}TimeMs`] ||
+                                config().mixConfig?.roundTimeMs) ??
+                                10_000) / 1_000
+                            }
+                            onInput={(event) =>
+                              changeMixSetting(
+                                `${tea}TimeMs`,
                                 Math.max(
-                                  (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
+                                  tea === "black" ? 5_000 : 1_000,
                                   Number(event.currentTarget.value) * 1_000 || 1_000,
                                 ),
                               )
                             }
                           />
                         </label>
-                      </Show>
-                      <Show
-                        when={
-                          (room()?.room.mode ?? mode()) === "mix" &&
-                          (room()?.players.filter(
-                            (player) => player.connected && player.kind === "human",
-                          ).length ?? 0) +
-                            (room()?.room.botCount ?? 0) <
-                            2
-                        }
-                      >
-                        <p class="feedback" role="status">
-                          Mix needs at least two connected players or bots. Add a player or a bot
-                          before starting.
-                        </p>
-                      </Show>
-                      <button
-                        class="submit-button"
-                        type="button"
-                        onClick={() => connection().startRoom()}
-                        disabled={
-                          room()?.room.phase === "countdown" ||
-                          connectionState() !== "connected" ||
-                          ((room()?.room.mode ?? mode()) === "mix" &&
-                            (room()?.players.filter(
-                              (player) => player.connected && player.kind === "human",
-                            ).length ?? 0) +
-                              (room()?.room.botCount ?? 0) <
-                              2)
-                        }
-                      >
-                        {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game"}
-                      </button>
-                    </div>
-                  </Show>
-                  <button class="restart-button" type="button" onClick={leaveRoom}>
-                    Leave room
-                  </button>
-                </div>
-              }
-            >
-              <div class="lobby-content">
-                <Show when={connectionState() === "reconnecting"}>
-                  <p class="connection-notice" role="status">
-                    Reconnecting to your room…
-                  </p>
+                        <label class="setting-control">
+                          <span>
+                            <strong>{tea === "black" ? "Points per word" : "Points"}</strong>
+                          </span>
+                          <input
+                            class="number-setting"
+                            type="number"
+                            min="0"
+                            max="20"
+                            value={config().mixConfig?.[`${tea}Points`] ?? 1}
+                            onInput={(event) =>
+                              changeMixSetting(
+                                `${tea}Points`,
+                                Math.max(0, Number(event.currentTarget.value) || 0),
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </For>
                 </Show>
-                <label class="setting-control">
-                  <span>
-                    <strong>Your name</strong>
-                  </span>
-                  <input
-                    value={name()}
-                    maxlength="24"
-                    onInput={(event) => setName(event.currentTarget.value)}
-                  />
-                </label>
-                <div class="lobby-controls">
-                  <button
-                    class="submit-button"
-                    type="button"
-                    disabled={connectionState() !== "connected"}
-                    onClick={() => startRoomConnection(true)}
-                  >
-                    Create room
-                  </button>
-                  <input
-                    aria-label="Room code"
-                    disabled={connectionState() !== "connected"}
-                    placeholder="Room code"
-                    maxlength="5"
-                    value={roomCodeEntry()}
-                    onInput={(event) => setRoomCodeEntry(event.currentTarget.value.toUpperCase())}
-                  />
-                  <button
-                    class="restart-button"
-                    type="button"
-                    disabled={roomCodeEntry().length !== 5 || connectionState() !== "connected"}
-                    onClick={() => startRoomConnection(false)}
-                  >
-                    Join
-                  </button>
-                </div>
               </div>
-            </Show>
-            <Show when={lobbyError()}>
-              <p class="feedback" role="alert">
-                {lobbyError()}
-              </p>
-            </Show>
-          </section>
-          <div class="setup-intro">
-            <p class="eyebrow">Choose your brew</p>
-            <h2>
-              Pick a mode.
-              <br />
-              <em>Play a quick round.</em>
-            </h2>
-            <p class="setup-copy">
-              Word games for one, with a table of bots to race, outscore, or outlast.
-            </p>
-          </div>
-          <div class="setup-panel">
-            <div class="mode-grid">
-              <For each={teaModes}>
-                {(tea) => (
-                  <button
-                    type="button"
-                    class={`mode-card ${mode() === tea.id ? "selected" : ""}`}
-                    onClick={() => setMode(tea.id)}
-                    aria-pressed={mode() === tea.id}
-                  >
-                    <span class="mode-glyph">{tea.glyph}</span>
-                    <span>
-                      <strong>{tea.label} Tea</strong>
-                      <small>{tea.desc}</small>
-                    </span>
-                    <i>{mode() === tea.id ? "✓" : ""}</i>
-                  </button>
-                )}
-              </For>
-            </div>
-            <div class="config-grid">
-              <label class="setting-control">
-                <span>
-                  <strong>Tea bots</strong>
-                  <small>Compete against 1 to 3 bots</small>
-                </span>
-                <select
-                  value={config().botCount}
-                  onChange={(event) => updateConfig("botCount", Number(event.currentTarget.value))}
+              <div class="setup-footer">
+                <p>{loadError() || (wordCatalog() ? "Dictionary ready" : "Loading dictionary…")}</p>
+                <button
+                  class="apply-button start-button"
+                  type="button"
+                  disabled={!wordCatalog()}
+                  onClick={startGame}
                 >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
-              </label>
-              <label class="setting-control skill-control">
-                <span>
-                  <strong>Bot skill</strong>
-                  <small>Speed and word choice</small>
-                </span>
-                <output>{Math.round(config().botSkill * 100)}%</output>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={config().botSkill}
-                  onInput={(event) => updateConfig("botSkill", Number(event.currentTarget.value))}
-                />
-              </label>
-              <Show when={mode() !== "black" && mode() !== "mix"}>
-                <label class="setting-control">
-                  <span>
-                    <strong>Points to win</strong>
-                    <small>{mode() === "green" ? "Default: 30" : "Default: 4"}</small>
-                  </span>
-                  <input
-                    class="number-setting"
-                    type="number"
-                    min="1"
-                    max="99"
-                    value={config().pointsToWin}
-                    onInput={(event) =>
-                      updateConfig(
-                        "pointsToWin",
-                        Math.max(1, Number(event.currentTarget.value) || 1),
-                      )
-                    }
-                  />
-                </label>
-              </Show>
-              <Show when={mode() !== "mix"}>
-                <label class="setting-control">
-                  <span>
-                    <strong>{mode() === "black" ? "Turn time" : "Time per round"}</strong>
-                    <small>Seconds before the round moves on</small>
-                  </span>
-                  <span class="time-setting">
-                    <input
-                      class="number-setting"
-                      type="number"
-                      min={mode() === "black" ? 5 : 1}
-                      max="120"
-                      value={config().roundTimeMs / 1_000}
-                      onInput={(event) =>
-                        updateConfig(
-                          "roundTimeMs",
-                          Math.max(
-                            mode() === "black" ? 5_000 : 1_000,
-                            Number(event.currentTarget.value) * 1_000 || 1_000,
-                          ),
-                        )
-                      }
-                    />
-                    <small>sec</small>
-                  </span>
-                </label>
-              </Show>
-              <Show when={mode() === "red" || mode() === "yellow"}>
-                <label class="check-setting">
-                  <input
-                    type="checkbox"
-                    checked={config().allowWordReuse}
-                    onChange={(event) =>
-                      updateConfig("allowWordReuse", event.currentTarget.checked)
-                    }
-                  />
-                  <span>
-                    <strong>Allow word reuse</strong>
-                    <small>Words used in earlier rounds are allowed</small>
-                  </span>
-                </label>
-              </Show>
-              <Show when={mode() === "yellow"}>
-                <label class="check-setting">
-                  <input
-                    type="checkbox"
-                    checked={config().ignoreInvalidWords}
-                    onChange={(event) =>
-                      updateConfig("ignoreInvalidWords", event.currentTarget.checked)
-                    }
-                  />
-                  <span>
-                    <strong>Ignore invalid words</strong>
-                    <small>Turn off to subtract one per invalid word</small>
-                  </span>
-                </label>
-              </Show>
-              <Show when={mode() === "mix"}>
-                <label class="setting-control">
-                  <span>
-                    <strong>Points to win</strong>
-                    <small>First to this score wins</small>
-                  </span>
-                  <input
-                    class="number-setting"
-                    type="number"
-                    min="1"
-                    max="99"
-                    value={config().mixConfig?.pointsToWin ?? 4}
-                    onInput={(event) =>
-                      changeMixSetting(
-                        "pointsToWin",
-                        Math.max(1, Number(event.currentTarget.value) || 1),
-                      )
-                    }
-                  />
-                </label>
-                <label class="setting-control">
-                  <span>
-                    <strong>Base HP</strong>
-                    <small>Misses before elimination</small>
-                  </span>
-                  <input
-                    class="number-setting"
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={config().mixConfig?.baseHp ?? 2}
-                    onInput={(event) =>
-                      changeMixSetting(
-                        "baseHp",
-                        Math.max(1, Number(event.currentTarget.value) || 1),
-                      )
-                    }
-                  />
-                </label>
-                <label class="setting-control">
-                  <span>
-                    <strong>Default round time</strong>
-                    <small>Tea-specific times can override this</small>
-                  </span>
-                  <input
-                    class="number-setting"
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={(config().mixConfig?.roundTimeMs ?? 10_000) / 1_000}
-                    onInput={(event) =>
-                      changeMixSetting(
-                        "roundTimeMs",
-                        Math.max(1_000, Number(event.currentTarget.value) * 1_000 || 1_000),
-                      )
-                    }
-                  />
-                </label>
-                <label class="check-setting">
-                  <input
-                    type="checkbox"
-                    checked={config().mixConfig?.avoidImmediateRepeat ?? true}
-                    onChange={(event) =>
-                      changeMixSetting("avoidImmediateRepeat", event.currentTarget.checked)
-                    }
-                  />
-                  <span>
-                    <strong>Avoid back-to-back repeats</strong>
-                    <small>Unless only one tea is enabled</small>
-                  </span>
-                </label>
-                <label class="check-setting">
-                  <input
-                    type="checkbox"
-                    checked={config().mixConfig?.reuseWordsPerTea ?? false}
-                    onChange={(event) =>
-                      changeMixSetting("reuseWordsPerTea", event.currentTarget.checked)
-                    }
-                  />
-                  <span>
-                    <strong>Keep separate word history per tea</strong>
-                    <small>Off: a word used in any tea stays used for the whole game</small>
-                  </span>
-                </label>
-                <For each={["black", "green", "red", "yellow"] as const}>
-                  {(tea) => (
-                    <div class="mix-tea-setting">
-                      <label class="check-setting">
-                        <input
-                          type="checkbox"
-                          checked={config().mixConfig?.[`${tea}Enabled`] ?? true}
-                          disabled={mixTeaCannotBeDisabled(tea)}
-                          onChange={(event) =>
-                            changeMixSetting(`${tea}Enabled`, event.currentTarget.checked)
-                          }
-                        />
-                        <span>
-                          <strong>
-                            {tea[0]?.toUpperCase()}
-                            {tea.slice(1)} Tea
-                          </strong>
-                          <small>
-                            {tea === "black" ? "Bomb sequence" : "Round winner scores points"}
-                          </small>
-                        </span>
-                      </label>
-                      <label class="setting-control">
-                        <span>
-                          <strong>Time (seconds)</strong>
-                        </span>
-                        <input
-                          class="number-setting"
-                          type="number"
-                          min={tea === "black" ? 5 : 1}
-                          max="120"
-                          value={
-                            ((config().mixConfig?.[`${tea}TimeMs`] ||
-                              config().mixConfig?.roundTimeMs) ??
-                              10_000) / 1_000
-                          }
-                          onInput={(event) =>
-                            changeMixSetting(
-                              `${tea}TimeMs`,
-                              Math.max(
-                                tea === "black" ? 5_000 : 1_000,
-                                Number(event.currentTarget.value) * 1_000 || 1_000,
-                              ),
-                            )
-                          }
-                        />
-                      </label>
-                      <label class="setting-control">
-                        <span>
-                          <strong>{tea === "black" ? "Points per word" : "Points"}</strong>
-                        </span>
-                        <input
-                          class="number-setting"
-                          type="number"
-                          min="0"
-                          max="20"
-                          value={config().mixConfig?.[`${tea}Points`] ?? 1}
-                          onInput={(event) =>
-                            changeMixSetting(
-                              `${tea}Points`,
-                              Math.max(0, Number(event.currentTarget.value) || 0),
-                            )
-                          }
-                        />
-                      </label>
-                    </div>
-                  )}
-                </For>
-              </Show>
+                  Start {mode()[0]?.toUpperCase()}
+                  {mode().slice(1)} Tea <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </div>
-            <div class="setup-footer">
-              <p>{loadError() || (wordCatalog() ? "Dictionary ready" : "Loading dictionary…")}</p>
-              <button
-                class="apply-button start-button"
-                type="button"
-                disabled={!wordCatalog()}
-                onClick={startGame}
-              >
-                Start {mode()[0]?.toUpperCase()}
-                {mode().slice(1)} Tea <span aria-hidden="true">→</span>
-              </button>
-            </div>
-          </div>
-        </section>
+          </section>
+        </Show>
       </Show>
 
-      <footer class="footer">
-        <span>BREWED FOR WORD LOVERS</span>
-        <span>
-          One fragment at a time <i>✳</i>
-        </span>
-      </footer>
+      <Show when={game() || !showModeIntro() || room()}>
+        <footer class="footer">
+          <span>BREWED FOR WORD LOVERS</span>
+          <span>
+            One fragment at a time <i>✳</i>
+          </span>
+        </footer>
+      </Show>
     </main>
   );
 }
