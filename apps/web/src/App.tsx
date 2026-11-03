@@ -2,7 +2,6 @@ import type {
   BlackPlayerState,
   GamePlayer,
   MixConfig,
-  MixTea,
   RoundModeEffect,
   RoundResult,
   RoundSubmission,
@@ -20,6 +19,9 @@ import {
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import blackTeaFox from "./assets/black-tea-fox.svg";
+import nervousFoxPortrait from "./assets/fox-face-portrait-nervous.svg";
+import foxFacePortrait from "./assets/fox-face-portrait-static.svg";
+import scaredFoxPortrait from "./assets/fox-face-portrait-scared.svg";
 import greenTeaFox from "./assets/green-tea-fox.svg";
 import mixTeaFox from "./assets/mix-tea-fox.svg";
 import redTeaFox from "./assets/red-tea-fox.svg";
@@ -215,6 +217,7 @@ function seconds(milliseconds: number): string {
 export function App() {
   const [mode, setMode] = createSignal<TeaMode>("red");
   const [showModeIntro, setShowModeIntro] = createSignal(true);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [configs, setConfigs] = createSignal(initialUiConfigs());
   const [game, setGame] = createSignal<AnyGameState | null>(null);
   const [connection, setConnection] = createSignal<GameConnection>(new LocalConnection());
@@ -228,7 +231,7 @@ export function App() {
   const [entry, setEntry] = createSignal("");
   const [clock, setClock] = createSignal(0);
   const [feed, setFeed] = createSignal<SubmissionFeedItem[]>([]);
-  const [loadError, setLoadError] = createSignal("");
+  const [, setLoadError] = createSignal("");
   const [wordCatalog, setWordCatalog] = createSignal<Awaited<
     ReturnType<typeof loadWordCatalog>
   > | null>(null);
@@ -236,8 +239,28 @@ export function App() {
   let unsubscribeActive = () => {};
 
   const config = () => configs()[mode()];
+  const botAbilityFox = () => {
+    const skill = config().botSkill;
+    if (skill >= 0.75) return scaredFoxPortrait;
+    if (skill >= 0.4) return nervousFoxPortrait;
+    return foxFacePortrait;
+  };
+
   function updateConfig<K extends keyof UiModeConfig>(key: K, value: UiModeConfig[K]): void {
     setConfigs((current) => ({ ...current, [mode()]: { ...current[mode()], [key]: value } }));
+  }
+
+  function updateRoundTime(secondsValue: number): void {
+    const seconds = Number.isFinite(secondsValue) ? Math.min(120, Math.max(1, secondsValue)) : 1;
+    const milliseconds = Math.max(mode() === "black" ? 5_000 : 1_000, seconds * 1_000);
+    if (mode() === "mix") changeMixSetting("roundTimeMs", milliseconds);
+    else updateConfig("roundTimeMs", milliseconds);
+  }
+
+  function updatePointsTarget(pointsValue: number): void {
+    const points = Math.min(99, Math.max(1, Number(pointsValue) || 1));
+    if (mode() === "mix") changeMixSetting("pointsToWin", points);
+    else updateConfig("pointsToWin", points);
   }
 
   function recordEffects(
@@ -340,17 +363,6 @@ export function App() {
     connection().configureRoom("mix", selectedEngineConfig("mix", settings), settings.botCount);
   }
 
-  function mixTeaCannotBeDisabled(tea: MixTea): boolean {
-    const selected = configs().mix.mixConfig ?? defaultMixConfig;
-    return (
-      selected[`${tea}Enabled` as keyof MixConfig] === true &&
-      !(["black", "green", "red", "yellow"] as const).some(
-        (candidate) =>
-          candidate !== tea && selected[`${candidate}Enabled` as keyof MixConfig] === true,
-      )
-    );
-  }
-
   function leaveRoom(): void {
     connection().close();
     const local = new LocalConnection();
@@ -392,6 +404,7 @@ export function App() {
   function startGame(): void {
     const catalog = wordCatalog();
     if (!catalog) return;
+    setSettingsOpen(false);
     const selected = mode();
     const settings = configs()[selected];
     if (
@@ -914,6 +927,19 @@ export function App() {
       >
         <Show when={showModeIntro() && !room()}>
           <section class="mode-intro-screen" aria-label={`${mode()} tea introduction`}>
+            <button
+              class="intro-settings-button"
+              type="button"
+              aria-label="Open settings"
+              aria-expanded={settingsOpen()}
+              title="Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9.7 3.4.6-1.1h3.4l.6 1.1c.4.1.8.3 1.2.5l1.2-.3 2.4 2.4-.3 1.2c.2.4.4.8.5 1.2l1.1.6v3.4l-1.1.6c-.1.4-.3.8-.5 1.2l.3 1.2-2.4 2.4-1.2-.3c-.4.2-.8.4-1.2.5l-.6 1.1h-3.4l-.6-1.1c-.4-.1-.8-.3-1.2-.5l-1.2.3-2.4-2.4.3-1.2c-.2-.4-.4-.8-.5-1.2l-1.1-.6V9l1.1-.6c.1-.4.3-.8.5-1.2l-.3-1.2 2.4-2.4 1.2.3c.4-.2.8-.4 1.2-.5Z" />
+                <circle cx="12" cy="10.7" r="3.1" />
+              </svg>
+            </button>
             <div class="mode-intro-content">
               <h1 class="mode-intro-title">
                 <span class="mode-selector">
@@ -955,10 +981,204 @@ export function App() {
                 <h2 class="how-it-works-label">How this works</h2>
                 <p class="how-it-works-body">{teaHowItWorks[mode()].body}</p>
               </section>
-              <button class="continue-button" type="button" onClick={() => setShowModeIntro(false)}>
-                Continue to settings <span aria-hidden="true">→</span>
+              <button
+                class="continue-button"
+                type="button"
+                disabled={!wordCatalog()}
+                onClick={startGame}
+              >
+                Start <span aria-hidden="true">→</span>
               </button>
             </div>
+            <Show when={settingsOpen()}>
+              <div class="settings-backdrop" role="presentation">
+                <section
+                  class="settings-popover"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="settings-title"
+                >
+                  <div class="settings-popover-heading">
+                    <h2 id="settings-title">Settings</h2>
+                    <button
+                      class="settings-close-button"
+                      type="button"
+                      aria-label="Close settings"
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div class="settings-popover-list">
+                    <label class="settings-slider-row">
+                      <span class="settings-range-heading">
+                        <span>Tea</span>
+                        <output>
+                          {teaModes.find((tea) => tea.id === mode())?.label ?? "Red"} Tea
+                        </output>
+                      </span>
+                      <input
+                        class="settings-range"
+                        aria-label="Tea"
+                        type="range"
+                        min="0"
+                        max={teaModes.length - 1}
+                        step="1"
+                        value={Math.max(
+                          0,
+                          teaModes.findIndex((tea) => tea.id === mode()),
+                        )}
+                        style={"--range-fox: url(" + foxFacePortrait + ")"}
+                        onInput={(event) => {
+                          const tea = teaModes[Number(event.currentTarget.value)];
+                          if (tea) setMode(tea.id);
+                        }}
+                      />
+                    </label>
+                    <label class="settings-slider-row">
+                      <span class="settings-range-heading">
+                        <span>Time</span>
+                        <output>
+                          {Math.round(
+                            (mode() === "mix"
+                              ? (config().mixConfig?.roundTimeMs ?? config().roundTimeMs)
+                              : config().roundTimeMs) / 1_000,
+                          )}{" "}
+                          sec
+                        </output>
+                      </span>
+                      <input
+                        class="settings-range"
+                        aria-label="Time in seconds"
+                        type="range"
+                        min={mode() === "black" ? 5 : 1}
+                        max="120"
+                        step="1"
+                        value={
+                          mode() === "mix"
+                            ? (config().mixConfig?.roundTimeMs ?? config().roundTimeMs) / 1_000
+                            : config().roundTimeMs / 1_000
+                        }
+                        style={"--range-fox: url(" + foxFacePortrait + ")"}
+                        onInput={(event) => updateRoundTime(Number(event.currentTarget.value))}
+                      />
+                    </label>
+                    <label class="settings-slider-row">
+                      <span class="settings-range-heading">
+                        <span>Bots</span>
+                        <output>{config().botCount}</output>
+                      </span>
+                      <input
+                        class="settings-range"
+                        aria-label="Bots"
+                        type="range"
+                        min="1"
+                        max="3"
+                        step="1"
+                        value={config().botCount}
+                        style={"--range-fox: url(" + foxFacePortrait + ")"}
+                        onInput={(event) =>
+                          updateConfig("botCount", Number(event.currentTarget.value))
+                        }
+                      />
+                    </label>
+                    <label class="settings-range-row">
+                      <span class="settings-range-heading">
+                        <span>Bot ability</span>
+                        <img src={botAbilityFox()} alt="" aria-hidden="true" />
+                        <output>{Math.round(config().botSkill * 100)}%</output>
+                      </span>
+                      <input
+                        class="settings-range"
+                        aria-label="Bot ability"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={config().botSkill}
+                        style={"--range-fox: url(" + botAbilityFox() + ")"}
+                        onInput={(event) =>
+                          updateConfig("botSkill", Number(event.currentTarget.value))
+                        }
+                      />
+                    </label>
+                    <Show when={mode() !== "black"}>
+                      <label class="settings-slider-row">
+                        <span class="settings-range-heading">
+                          <span>Points to win</span>
+                          <output>
+                            {mode() === "mix"
+                              ? (config().mixConfig?.pointsToWin ?? defaultMixConfig.pointsToWin)
+                              : config().pointsToWin}
+                          </output>
+                        </span>
+                        <input
+                          class="settings-range"
+                          aria-label="Points to win"
+                          type="range"
+                          min="1"
+                          max="99"
+                          step="1"
+                          value={
+                            mode() === "mix"
+                              ? (config().mixConfig?.pointsToWin ?? defaultMixConfig.pointsToWin)
+                              : config().pointsToWin
+                          }
+                          style={"--range-fox: url(" + foxFacePortrait + ")"}
+                          onInput={(event) => updatePointsTarget(Number(event.currentTarget.value))}
+                        />
+                      </label>
+                    </Show>
+                    <Show when={mode() === "red" || mode() === "yellow" || mode() === "mix"}>
+                      <label class="settings-slider-row">
+                        <span class="settings-range-heading">
+                          <span>Allow word reuse</span>
+                          <output>
+                            {(
+                              mode() === "mix"
+                                ? (config().mixConfig?.reuseWordsPerTea ?? false)
+                                : config().allowWordReuse
+                            )
+                              ? "On"
+                              : "Off"}
+                          </output>
+                        </span>
+                        <input
+                          class="settings-range"
+                          aria-label="Allow word reuse"
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="1"
+                          value={
+                            mode() === "mix"
+                              ? config().mixConfig?.reuseWordsPerTea
+                                ? 1
+                                : 0
+                              : config().allowWordReuse
+                                ? 1
+                                : 0
+                          }
+                          style={"--range-fox: url(" + foxFacePortrait + ")"}
+                          onInput={(event) => {
+                            const allowReuse = Number(event.currentTarget.value) === 1;
+                            if (mode() === "mix") changeMixSetting("reuseWordsPerTea", allowReuse);
+                            else updateConfig("allowWordReuse", allowReuse);
+                          }}
+                        />
+                      </label>
+                    </Show>
+                  </div>
+                  <button
+                    class="settings-done-button"
+                    type="button"
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    Done
+                  </button>
+                </section>
+              </div>
+            </Show>
           </section>
         </Show>
         <Show when={!showModeIntro() || room()}>
@@ -1213,329 +1433,6 @@ export function App() {
                 </p>
               </Show>
             </section>
-            <div class="setup-intro">
-              <p class="eyebrow">Choose your brew</p>
-              <h2>
-                Pick a mode.
-                <br />
-                <em>Play a quick round.</em>
-              </h2>
-              <p class="setup-copy">
-                Five quick word games. Race the clock, outscore the table, or let the kettle choose.
-              </p>
-            </div>
-            <div class="setup-panel">
-              <div class="setup-panel-heading">
-                <div>
-                  <p class="eyebrow">The main event</p>
-                  <h3>Choose how the table plays</h3>
-                </div>
-                <span class="selected-mode-badge">
-                  <span class={`theme-dot ${mode()}`} />
-                  {mode()[0]?.toUpperCase()}
-                  {mode().slice(1)} Tea
-                </span>
-              </div>
-              <div class="mode-grid">
-                <For each={teaModes}>
-                  {(tea) => (
-                    <button
-                      type="button"
-                      class={`mode-card ${mode() === tea.id ? "selected" : ""}`}
-                      onClick={() => setMode(tea.id)}
-                      aria-pressed={mode() === tea.id}
-                    >
-                      <span class="mode-glyph">{tea.glyph}</span>
-                      <span>
-                        <strong>{tea.label} Tea</strong>
-                        <small>{tea.desc}</small>
-                      </span>
-                      <i>{mode() === tea.id ? "✓" : ""}</i>
-                    </button>
-                  )}
-                </For>
-              </div>
-              <div class="settings-divider">
-                <span>Fine tune the table</span>
-                <small>Optional</small>
-              </div>
-              <div class="config-grid">
-                <label class="setting-control">
-                  <span>
-                    <strong>Tea bots</strong>
-                    <small>Compete against 1 to 3 bots</small>
-                  </span>
-                  <select
-                    value={config().botCount}
-                    onChange={(event) =>
-                      updateConfig("botCount", Number(event.currentTarget.value))
-                    }
-                  >
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                  </select>
-                </label>
-                <label class="setting-control skill-control">
-                  <span>
-                    <strong>Bot skill</strong>
-                    <small>Speed and word choice</small>
-                  </span>
-                  <output>{Math.round(config().botSkill * 100)}%</output>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={config().botSkill}
-                    onInput={(event) => updateConfig("botSkill", Number(event.currentTarget.value))}
-                  />
-                </label>
-                <Show when={mode() !== "black" && mode() !== "mix"}>
-                  <label class="setting-control">
-                    <span>
-                      <strong>Points to win</strong>
-                      <small>{mode() === "green" ? "Default: 30" : "Default: 4"}</small>
-                    </span>
-                    <input
-                      class="number-setting"
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={config().pointsToWin}
-                      onInput={(event) =>
-                        updateConfig(
-                          "pointsToWin",
-                          Math.max(1, Number(event.currentTarget.value) || 1),
-                        )
-                      }
-                    />
-                  </label>
-                </Show>
-                <Show when={mode() !== "mix"}>
-                  <label class="setting-control">
-                    <span>
-                      <strong>{mode() === "black" ? "Turn time" : "Time per round"}</strong>
-                      <small>Seconds before the round moves on</small>
-                    </span>
-                    <span class="time-setting">
-                      <input
-                        class="number-setting"
-                        type="number"
-                        min={mode() === "black" ? 5 : 1}
-                        max="120"
-                        value={config().roundTimeMs / 1_000}
-                        onInput={(event) =>
-                          updateConfig(
-                            "roundTimeMs",
-                            Math.max(
-                              mode() === "black" ? 5_000 : 1_000,
-                              Number(event.currentTarget.value) * 1_000 || 1_000,
-                            ),
-                          )
-                        }
-                      />
-                      <small>sec</small>
-                    </span>
-                  </label>
-                </Show>
-                <Show when={mode() === "red" || mode() === "yellow"}>
-                  <label class="check-setting">
-                    <input
-                      type="checkbox"
-                      checked={config().allowWordReuse}
-                      onChange={(event) =>
-                        updateConfig("allowWordReuse", event.currentTarget.checked)
-                      }
-                    />
-                    <span>
-                      <strong>Allow word reuse</strong>
-                      <small>Words used in earlier rounds are allowed</small>
-                    </span>
-                  </label>
-                </Show>
-                <Show when={mode() === "yellow"}>
-                  <label class="check-setting">
-                    <input
-                      type="checkbox"
-                      checked={config().ignoreInvalidWords}
-                      onChange={(event) =>
-                        updateConfig("ignoreInvalidWords", event.currentTarget.checked)
-                      }
-                    />
-                    <span>
-                      <strong>Ignore invalid words</strong>
-                      <small>Turn off to subtract one per invalid word</small>
-                    </span>
-                  </label>
-                </Show>
-                <Show when={mode() === "mix"}>
-                  <label class="setting-control">
-                    <span>
-                      <strong>Points to win</strong>
-                      <small>First to this score wins</small>
-                    </span>
-                    <input
-                      class="number-setting"
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={config().mixConfig?.pointsToWin ?? 4}
-                      onInput={(event) =>
-                        changeMixSetting(
-                          "pointsToWin",
-                          Math.max(1, Number(event.currentTarget.value) || 1),
-                        )
-                      }
-                    />
-                  </label>
-                  <label class="setting-control">
-                    <span>
-                      <strong>Base HP</strong>
-                      <small>Misses before elimination</small>
-                    </span>
-                    <input
-                      class="number-setting"
-                      type="number"
-                      min="1"
-                      max="12"
-                      value={config().mixConfig?.baseHp ?? 2}
-                      onInput={(event) =>
-                        changeMixSetting(
-                          "baseHp",
-                          Math.max(1, Number(event.currentTarget.value) || 1),
-                        )
-                      }
-                    />
-                  </label>
-                  <label class="setting-control">
-                    <span>
-                      <strong>Default round time</strong>
-                      <small>Tea-specific times can override this</small>
-                    </span>
-                    <input
-                      class="number-setting"
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={(config().mixConfig?.roundTimeMs ?? 10_000) / 1_000}
-                      onInput={(event) =>
-                        changeMixSetting(
-                          "roundTimeMs",
-                          Math.max(1_000, Number(event.currentTarget.value) * 1_000 || 1_000),
-                        )
-                      }
-                    />
-                  </label>
-                  <label class="check-setting">
-                    <input
-                      type="checkbox"
-                      checked={config().mixConfig?.avoidImmediateRepeat ?? true}
-                      onChange={(event) =>
-                        changeMixSetting("avoidImmediateRepeat", event.currentTarget.checked)
-                      }
-                    />
-                    <span>
-                      <strong>Avoid back-to-back repeats</strong>
-                      <small>Unless only one tea is enabled</small>
-                    </span>
-                  </label>
-                  <label class="check-setting">
-                    <input
-                      type="checkbox"
-                      checked={config().mixConfig?.reuseWordsPerTea ?? false}
-                      onChange={(event) =>
-                        changeMixSetting("reuseWordsPerTea", event.currentTarget.checked)
-                      }
-                    />
-                    <span>
-                      <strong>Keep separate word history per tea</strong>
-                      <small>Off: a word used in any tea stays used for the whole game</small>
-                    </span>
-                  </label>
-                  <For each={["black", "green", "red", "yellow"] as const}>
-                    {(tea) => (
-                      <div class="mix-tea-setting">
-                        <label class="check-setting">
-                          <input
-                            type="checkbox"
-                            checked={config().mixConfig?.[`${tea}Enabled`] ?? true}
-                            disabled={mixTeaCannotBeDisabled(tea)}
-                            onChange={(event) =>
-                              changeMixSetting(`${tea}Enabled`, event.currentTarget.checked)
-                            }
-                          />
-                          <span>
-                            <strong>
-                              {tea[0]?.toUpperCase()}
-                              {tea.slice(1)} Tea
-                            </strong>
-                            <small>
-                              {tea === "black" ? "Bomb sequence" : "Round winner scores points"}
-                            </small>
-                          </span>
-                        </label>
-                        <label class="setting-control">
-                          <span>
-                            <strong>Time (seconds)</strong>
-                          </span>
-                          <input
-                            class="number-setting"
-                            type="number"
-                            min={tea === "black" ? 5 : 1}
-                            max="120"
-                            value={
-                              ((config().mixConfig?.[`${tea}TimeMs`] ||
-                                config().mixConfig?.roundTimeMs) ??
-                                10_000) / 1_000
-                            }
-                            onInput={(event) =>
-                              changeMixSetting(
-                                `${tea}TimeMs`,
-                                Math.max(
-                                  tea === "black" ? 5_000 : 1_000,
-                                  Number(event.currentTarget.value) * 1_000 || 1_000,
-                                ),
-                              )
-                            }
-                          />
-                        </label>
-                        <label class="setting-control">
-                          <span>
-                            <strong>{tea === "black" ? "Points per word" : "Points"}</strong>
-                          </span>
-                          <input
-                            class="number-setting"
-                            type="number"
-                            min="0"
-                            max="20"
-                            value={config().mixConfig?.[`${tea}Points`] ?? 1}
-                            onInput={(event) =>
-                              changeMixSetting(
-                                `${tea}Points`,
-                                Math.max(0, Number(event.currentTarget.value) || 0),
-                              )
-                            }
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </For>
-                </Show>
-              </div>
-              <div class="setup-footer">
-                <p>{loadError() || (wordCatalog() ? "Dictionary ready" : "Loading dictionary…")}</p>
-                <button
-                  class="apply-button start-button"
-                  type="button"
-                  disabled={!wordCatalog()}
-                  onClick={startGame}
-                >
-                  Start {mode()[0]?.toUpperCase()}
-                  {mode().slice(1)} Tea <span aria-hidden="true">→</span>
-                </button>
-              </div>
-            </div>
           </section>
         </Show>
       </Show>
