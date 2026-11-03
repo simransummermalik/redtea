@@ -5,8 +5,8 @@ export interface FilterReport {
   duplicateEntries: number;
   properNameEntriesExcluded: number;
   nonAlphaEntriesExcluded: number;
-  pluralsExcluded: number;
-  ingFormsExcluded: number;
+  pluralsRetained: number;
+  ingFormsRetained: number;
   finalWords: number;
   fragmentsBelowMinimum: number;
   fragmentsByDifficulty: Record<Difficulty, number>;
@@ -73,8 +73,8 @@ export function processWordLists(
     duplicateEntries: 0,
     properNameEntriesExcluded: properNameLines.length,
     nonAlphaEntriesExcluded: 0,
-    pluralsExcluded: 0,
-    ingFormsExcluded: 0,
+    pluralsRetained: 0,
+    ingFormsRetained: 0,
     finalWords: 0,
     fragmentsBelowMinimum: 0,
     fragmentsByDifficulty: { easy: 0, medium: 0, hard: 0 },
@@ -98,14 +98,8 @@ export function processWordLists(
   const words: string[] = [];
   for (const word of normalized) {
     const kind = getInflectionKind(word, normalized);
-    if (kind === "plural") {
-      report.pluralsExcluded += 1;
-      continue;
-    }
-    if (kind === "ing") {
-      report.ingFormsExcluded += 1;
-      continue;
-    }
+    if (kind === "plural") report.pluralsRetained += 1;
+    if (kind === "ing") report.ingFormsRetained += 1;
     words.push(word);
   }
   words.sort();
@@ -120,12 +114,12 @@ export function processWordLists(
     report.samples[sample] = {
       included,
       reason: included
-        ? "retained as a base word"
-        : excludedAs === "plural"
-          ? "excluded because a singular stem is present"
+        ? excludedAs === "plural"
+          ? "retained as a plural form"
           : excludedAs === "ing"
-            ? "excluded because its verb stem is present"
-            : "not present in the source word list",
+            ? "retained as an -ing form"
+            : "retained as a word"
+        : "not present in the source word list",
     };
   }
 
