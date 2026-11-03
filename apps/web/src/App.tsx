@@ -8,15 +8,15 @@ import {
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import babyFoxPortrait from "./assets/fox-face-portrait-baby.svg";
 import blackTeaFox from "./assets/black-tea-fox.svg";
-import foxesThree from "./assets/foxes-three.svg";
-import foxesTwo from "./assets/foxes-two.svg";
+import babyFoxPortrait from "./assets/fox-face-portrait-baby.svg";
 import middleAgedFoxPortrait from "./assets/fox-face-portrait-middle-aged.svg";
 import nervousFoxPortrait from "./assets/fox-face-portrait-nervous.svg";
-import foxFacePortrait from "./assets/fox-face-portrait-static.svg";
 import scaredFoxPortrait from "./assets/fox-face-portrait-scared.svg";
+import foxFacePortrait from "./assets/fox-face-portrait-static.svg";
 import veryOldFoxPortrait from "./assets/fox-face-portrait-very-old.svg";
+import foxesThree from "./assets/foxes-three.svg";
+import foxesTwo from "./assets/foxes-two.svg";
 import greenTeaFox from "./assets/green-tea-fox.svg";
 import mixTeaFox from "./assets/mix-tea-fox.svg";
 import redTeaFox from "./assets/red-tea-fox.svg";
@@ -31,6 +31,7 @@ import {
 } from "./connection";
 import { type EffectPulse, GameScreen } from "./game/GameScreen";
 import { loadWordCatalog } from "./gameData";
+import { ToastViewport, useToast } from "./Toast";
 import "./styles.css";
 
 type TeaMode = GameMode;
@@ -184,7 +185,198 @@ function initialUiConfigs(): Record<TeaMode, UiModeConfig> {
   };
 }
 
+const mixTeas = [
+  { id: "black", label: "Black", tint: "#354536" },
+  { id: "green", label: "Green", tint: "#3f805a" },
+  { id: "red", label: "Red", tint: "#b94f48" },
+  { id: "yellow", label: "Yellow", tint: "#b98527" },
+] as const;
+
+function TeaSettings(props: {
+  mode: TeaMode;
+  settings: UiModeConfig;
+  disabled?: boolean;
+  onYellowIgnoreChange: (value: boolean) => void;
+  onMixChange: <Key extends keyof MixConfig>(key: Key, value: MixConfig[Key]) => void;
+}) {
+  const mix = () => props.settings.mixConfig ?? defaultMixConfig;
+  const setSeconds = (
+    key: "blackTimeMs" | "greenTimeMs" | "redTimeMs" | "yellowTimeMs",
+    value: string,
+  ) =>
+    props.onMixChange(
+      key,
+      value === "" ? 0 : Math.max(1_000, Math.min(120_000, Number(value) * 1_000)),
+    );
+
+  return (
+    <Show when={props.mode === "yellow" || props.mode === "mix"}>
+      <Show when={props.mode === "yellow"}>
+        <label class="settings-toggle-row">
+          <span>Ignore invalid words</span>
+          <span class="settings-toggle-value">
+            {props.settings.ignoreInvalidWords ? "Yes" : "No"}
+          </span>
+          <input
+            class="settings-toggle"
+            type="checkbox"
+            aria-label="Ignore invalid words"
+            checked={props.settings.ignoreInvalidWords}
+            disabled={props.disabled}
+            onChange={(event) => props.onYellowIgnoreChange(event.currentTarget.checked)}
+          />
+        </label>
+      </Show>
+      <Show when={props.mode === "mix"}>
+        <fieldset class="mix-settings-group">
+          <legend>Teas in the mix</legend>
+          <p class="settings-help">Choose which challenges can come up. Keep at least one.</p>
+          <div class="mix-tea-options">
+            <For each={mixTeas}>
+              {(tea) => {
+                const enabledKey = `${tea.id}Enabled` as const;
+                return (
+                  <label class="mix-tea-option" style={{ "--tea-choice": tea.tint }}>
+                    <input
+                      type="checkbox"
+                      checked={mix()[enabledKey]}
+                      disabled={props.disabled}
+                      onChange={(event) =>
+                        props.onMixChange(enabledKey, event.currentTarget.checked)
+                      }
+                    />
+                    <span>{tea.label}</span>
+                  </label>
+                );
+              }}
+            </For>
+          </div>
+        </fieldset>
+        <fieldset class="mix-settings-group">
+          <legend>Round rhythm</legend>
+          <label class="settings-row">
+            <span>Starting hearts</span>
+            <input
+              class="settings-number"
+              aria-label="Starting hearts"
+              type="number"
+              min="1"
+              max="10"
+              value={mix().baseHp}
+              disabled={props.disabled}
+              onInput={(event) =>
+                props.onMixChange(
+                  "baseHp",
+                  Math.max(1, Math.min(10, Number(event.currentTarget.value) || 1)),
+                )
+              }
+            />
+          </label>
+          <label class="settings-row">
+            <span>Break between teas (sec)</span>
+            <input
+              class="settings-number"
+              aria-label="Break between teas in seconds"
+              type="number"
+              min="0"
+              max="10"
+              value={mix().intermissionMs / 1_000}
+              disabled={props.disabled}
+              onInput={(event) =>
+                props.onMixChange(
+                  "intermissionMs",
+                  Math.max(0, Math.min(10_000, Number(event.currentTarget.value) * 1_000 || 0)),
+                )
+              }
+            />
+          </label>
+          <label class="settings-toggle-row">
+            <span>Avoid the same tea twice</span>
+            <span class="settings-toggle-value">{mix().avoidImmediateRepeat ? "Yes" : "No"}</span>
+            <input
+              class="settings-toggle"
+              type="checkbox"
+              aria-label="Avoid the same tea twice in a row"
+              checked={mix().avoidImmediateRepeat}
+              disabled={props.disabled}
+              onChange={(event) =>
+                props.onMixChange("avoidImmediateRepeat", event.currentTarget.checked)
+              }
+            />
+          </label>
+          <label class="settings-toggle-row">
+            <span>Ignore invalid words in Yellow</span>
+            <span class="settings-toggle-value">{mix().ignoreInvalidWords ? "Yes" : "No"}</span>
+            <input
+              class="settings-toggle"
+              type="checkbox"
+              aria-label="Ignore invalid words in Mix Yellow rounds"
+              checked={mix().ignoreInvalidWords}
+              disabled={props.disabled}
+              onChange={(event) =>
+                props.onMixChange("ignoreInvalidWords", event.currentTarget.checked)
+              }
+            />
+          </label>
+        </fieldset>
+        <fieldset class="mix-settings-group">
+          <legend>Per-tea tweaks</legend>
+          <p class="settings-help">Leave a time blank to use the shared round time.</p>
+          <For each={mixTeas}>
+            {(tea) => {
+              const timeKey = `${tea.id}TimeMs` as const;
+              const pointsKey = `${tea.id}Points` as const;
+              return (
+                <div class="mix-tea-tweak">
+                  <strong>{tea.label} tea</strong>
+                  <label class="settings-row">
+                    <span>Time override (sec)</span>
+                    <input
+                      class="settings-number"
+                      aria-label={`${tea.label} tea time override in seconds`}
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="Shared"
+                      value={mix()[timeKey] === 0 ? "" : mix()[timeKey] / 1_000}
+                      disabled={props.disabled}
+                      onInput={(event) => setSeconds(timeKey, event.currentTarget.value)}
+                    />
+                  </label>
+                  <label class="settings-row">
+                    <span>Points earned</span>
+                    <input
+                      class="settings-number"
+                      aria-label={`${tea.label} tea points earned`}
+                      type="number"
+                      min="0"
+                      max="10"
+                      value={mix()[pointsKey]}
+                      disabled={props.disabled}
+                      onInput={(event) =>
+                        props.onMixChange(
+                          pointsKey,
+                          Math.max(0, Math.min(10, Number(event.currentTarget.value) || 0)),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              );
+            }}
+          </For>
+        </fieldset>
+      </Show>
+    </Show>
+  );
+}
+
+function hasMixTea(config: MixConfig): boolean {
+  return mixTeas.some(({ id }) => config[`${id}Enabled`]);
+}
+
 export function App() {
+  const toast = useToast();
   const [mode, setMode] = createSignal<TeaMode>("red");
   const [showModeIntro, setShowModeIntro] = createSignal(true);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
@@ -201,12 +393,19 @@ export function App() {
   const [entry, setEntry] = createSignal("");
   const [clock, setClock] = createSignal(0);
   const [pulse, setPulse] = createSignal<EffectPulse>({ seq: 0, effects: [] });
-  const [, setLoadError] = createSignal("");
+  const [dictionaryStatus, setDictionaryStatus] = createSignal<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [dictionaryError, setDictionaryError] = createSignal("");
+  const [copyCelebration, setCopyCelebration] = createSignal(false);
   const [wordCatalog, setWordCatalog] = createSignal<Awaited<
     ReturnType<typeof loadWordCatalog>
   > | null>(null);
   let inputRef: HTMLInputElement | HTMLTextAreaElement | undefined;
   let unsubscribeActive = () => {};
+  let dictionaryToastId: number | undefined;
+  let copyCelebrationTimeout: number | undefined;
+  let copyCelebrationFrame: number | undefined;
 
   const config = () => configs()[mode()];
   const botAbilityFox = () => {
@@ -314,6 +513,55 @@ export function App() {
     connection().configureRoom("mix", selectedEngineConfig("mix", settings), settings.botCount);
   }
 
+  async function loadDictionary(): Promise<void> {
+    setDictionaryStatus("loading");
+    setDictionaryError("");
+    if (dictionaryToastId !== undefined) toast.dismiss(dictionaryToastId);
+    dictionaryToastId = toast.notify("Warming the kettle… loading the word list.", {
+      kind: "info",
+      durationMs: 0,
+    });
+    try {
+      const catalog = await loadWordCatalog();
+      setWordCatalog(catalog);
+      setDictionaryStatus("ready");
+      if (dictionaryToastId !== undefined) toast.dismiss(dictionaryToastId);
+      dictionaryToastId = undefined;
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message !== "Failed to fetch"
+          ? error.message
+          : "Could not reach the tea dictionary. Check your connection and try again.";
+      setDictionaryError(message);
+      setDictionaryStatus("error");
+      if (dictionaryToastId !== undefined) toast.dismiss(dictionaryToastId);
+      dictionaryToastId = toast.notify(`The dictionary couldn’t load. ${message}`, {
+        kind: "error",
+        action: { label: "Try again", run: () => void loadDictionary() },
+      });
+    }
+  }
+
+  async function copyRoomCode(): Promise<void> {
+    const code = room()?.room.code;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyCelebration(false);
+      if (copyCelebrationFrame !== undefined) cancelAnimationFrame(copyCelebrationFrame);
+      copyCelebrationFrame = requestAnimationFrame(() => setCopyCelebration(true));
+      if (copyCelebrationTimeout !== undefined) window.clearTimeout(copyCelebrationTimeout);
+      copyCelebrationTimeout = window.setTimeout(() => {
+        setCopyCelebration(false);
+        copyCelebrationTimeout = undefined;
+      }, 1_000);
+    } catch {
+      toast.notify("Couldn’t copy automatically. Select the room code and copy it manually.", {
+        kind: "error",
+      });
+    }
+  }
+
   function leaveRoom(): void {
     connection().close();
     const local = new LocalConnection();
@@ -394,11 +642,7 @@ export function App() {
   }
 
   onMount(() => {
-    void loadWordCatalog()
-      .then(setWordCatalog)
-      .catch((error: unknown) =>
-        setLoadError(error instanceof Error ? error.message : "Could not load the game dictionary"),
-      );
+    void loadDictionary();
     subscribeConnection(connection());
     try {
       const savedRaw = JSON.parse(sessionStorage.getItem("redtea.session") ?? "null") as unknown;
@@ -444,6 +688,8 @@ export function App() {
     const interval = window.setInterval(() => connection().tick(), 50);
     onCleanup(() => {
       window.clearInterval(interval);
+      if (copyCelebrationTimeout !== undefined) window.clearTimeout(copyCelebrationTimeout);
+      if (copyCelebrationFrame !== undefined) cancelAnimationFrame(copyCelebrationFrame);
       unsubscribeActive();
     });
   });
@@ -550,11 +796,32 @@ export function App() {
               <button
                 class="continue-button"
                 type="button"
-                disabled={!wordCatalog()}
+                disabled={
+                  dictionaryStatus() !== "ready" ||
+                  (mode() === "mix" && !hasMixTea(config().mixConfig ?? defaultMixConfig))
+                }
                 onClick={startGame}
               >
-                Start <span aria-hidden="true">→</span>
+                {dictionaryStatus() === "loading"
+                  ? "Loading words…"
+                  : dictionaryStatus() === "error"
+                    ? "Start unavailable"
+                    : "Start"}{" "}
+                <span aria-hidden="true">→</span>
               </button>
+              <Show when={dictionaryStatus() === "error"}>
+                <div class="dictionary-feedback" role="status">
+                  <span>{dictionaryError()}</span>
+                  <button type="button" onClick={() => void loadDictionary()}>
+                    Try again
+                  </button>
+                </div>
+              </Show>
+              <Show when={mode() === "mix" && !hasMixTea(config().mixConfig ?? defaultMixConfig)}>
+                <p class="dictionary-feedback" role="status">
+                  Choose at least one tea in Settings to start Mix.
+                </p>
+              </Show>
               <button
                 class="multiplayer-intro-button"
                 type="button"
@@ -597,7 +864,7 @@ export function App() {
                         max="120"
                         step="1"
                         value={timeSeconds()}
-                        style={"--range-fox: url(" + timeFox() + ")"}
+                        style={`--range-fox: url(${timeFox()})`}
                         onInput={(event) => updateRoundTime(Number(event.currentTarget.value))}
                       />
                     </label>
@@ -615,7 +882,7 @@ export function App() {
                         max="3"
                         step="1"
                         value={config().botCount}
-                        style={"--range-fox: url(" + botCountFox() + ")"}
+                        style={`--range-fox: url(${botCountFox()})`}
                         onInput={(event) =>
                           updateConfig("botCount", Number(event.currentTarget.value))
                         }
@@ -635,7 +902,7 @@ export function App() {
                         max="1"
                         step="0.05"
                         value={config().botSkill}
-                        style={"--range-fox: url(" + botAbilityFox() + ")"}
+                        style={`--range-fox: url(${botAbilityFox()})`}
                         onInput={(event) =>
                           updateConfig("botSkill", Number(event.currentTarget.value))
                         }
@@ -688,6 +955,12 @@ export function App() {
                         />
                       </label>
                     </Show>
+                    <TeaSettings
+                      mode={mode()}
+                      settings={config()}
+                      onYellowIgnoreChange={(value) => updateConfig("ignoreInvalidWords", value)}
+                      onMixChange={changeMixSetting}
+                    />
                   </div>
                   <button
                     class="settings-done-button"
@@ -726,6 +999,21 @@ export function App() {
                   <div class="party-room-code">
                     <span>ROOM CODE · SHARE WITH FRIENDS</span>
                     <strong>{room()?.room.code}</strong>
+                    <button
+                      class="copy-room-code"
+                      type="button"
+                      onClick={() => void copyRoomCode()}
+                    >
+                      <Show when={copyCelebration()}>
+                        <img
+                          class="copy-room-fox"
+                          src={foxFacePortrait}
+                          alt=""
+                          aria-hidden="true"
+                        />
+                      </Show>
+                      Copy code <span aria-hidden="true">✳</span>
+                    </button>
                   </div>
                   <Show when={connectionState() === "reconnecting"}>
                     <p class="party-notice" role="status">
@@ -836,12 +1124,7 @@ export function App() {
                             <option value="3">3</option>
                           </select>
                         </label>
-                        <Show
-                          when={
-                            (room()?.room.mode ?? mode()) !== "black" &&
-                            (room()?.room.mode ?? mode()) !== "mix"
-                          }
-                        >
+                        <Show when={(room()?.room.mode ?? mode()) !== "black"}>
                           <label>
                             Points to win
                             <input
@@ -849,41 +1132,80 @@ export function App() {
                               disabled={connectionState() !== "connected"}
                               min="1"
                               max="99"
-                              value={configs()[room()?.room.mode ?? mode()].pointsToWin}
-                              onChange={(event) =>
-                                changeRoomSetting(
-                                  room()?.room.mode ?? mode(),
-                                  "pointsToWin",
-                                  Math.max(1, Number(event.currentTarget.value) || 1),
-                                )
+                              value={
+                                (room()?.room.mode ?? mode()) === "mix"
+                                  ? (configs().mix.mixConfig?.pointsToWin ??
+                                    defaultMixConfig.pointsToWin)
+                                  : configs()[room()?.room.mode ?? mode()].pointsToWin
                               }
+                              onChange={(event) => {
+                                const target = room()?.room.mode ?? mode();
+                                const points = Math.max(
+                                  1,
+                                  Math.min(99, Number(event.currentTarget.value) || 1),
+                                );
+                                if (target === "mix") changeMixSetting("pointsToWin", points);
+                                else changeRoomSetting(target, "pointsToWin", points);
+                              }}
                             />
                           </label>
                         </Show>
-                        <Show when={(room()?.room.mode ?? mode()) !== "mix"}>
+                        <Show when={(room()?.room.mode ?? mode()) !== "black"}>
                           <label>
-                            Seconds per turn / round
+                            {(room()?.room.mode ?? mode()) === "mix"
+                              ? "Shared seconds per round"
+                              : "Seconds per turn / round"}
                             <input
                               type="number"
                               disabled={connectionState() !== "connected"}
-                              min={(room()?.room.mode ?? mode()) === "black" ? 5 : 1}
+                              min="1"
                               max="120"
-                              value={configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000}
-                              onChange={(event) =>
-                                changeRoomSetting(
-                                  room()?.room.mode ?? mode(),
-                                  "roundTimeMs",
-                                  Math.max(
-                                    (room()?.room.mode ?? mode()) === "black" ? 5_000 : 1_000,
+                              value={
+                                (room()?.room.mode ?? mode()) === "mix"
+                                  ? (configs().mix.mixConfig?.roundTimeMs ??
+                                      defaultMixConfig.roundTimeMs) / 1_000
+                                  : configs()[room()?.room.mode ?? mode()].roundTimeMs / 1_000
+                              }
+                              onChange={(event) => {
+                                const target = room()?.room.mode ?? mode();
+                                const time = Math.max(
+                                  1_000,
+                                  Math.min(
+                                    120_000,
                                     Number(event.currentTarget.value) * 1_000 || 1_000,
                                   ),
-                                )
-                              }
+                                );
+                                if (target === "mix") changeMixSetting("roundTimeMs", time);
+                                else changeRoomSetting(target, "roundTimeMs", time);
+                              }}
                             />
                           </label>
                         </Show>
+                        <TeaSettings
+                          mode={room()?.room.mode ?? mode()}
+                          settings={configs()[room()?.room.mode ?? mode()]}
+                          disabled={connectionState() !== "connected"}
+                          onYellowIgnoreChange={(value) =>
+                            changeRoomSetting(
+                              room()?.room.mode ?? mode(),
+                              "ignoreInvalidWords",
+                              value,
+                            )
+                          }
+                          onMixChange={changeMixSetting}
+                        />
                       </div>
                     </details>
+                    <Show
+                      when={
+                        (room()?.room.mode ?? mode()) === "mix" &&
+                        !hasMixTea(configs().mix.mixConfig ?? defaultMixConfig)
+                      }
+                    >
+                      <p class="party-notice" role="status">
+                        Choose at least one tea in Table settings before starting Mix.
+                      </p>
+                    </Show>
                     <Show
                       when={
                         (room()?.room.mode ?? mode()) === "mix" &&
@@ -907,11 +1229,12 @@ export function App() {
                         room()?.room.phase === "countdown" ||
                         connectionState() !== "connected" ||
                         ((room()?.room.mode ?? mode()) === "mix" &&
-                          (room()?.players.filter(
-                            (player) => player.connected && player.kind === "human",
-                          ).length ?? 0) +
-                            (room()?.room.botCount ?? 0) <
-                            2)
+                          (!hasMixTea(configs().mix.mixConfig ?? defaultMixConfig) ||
+                            (room()?.players.filter(
+                              (player) => player.connected && player.kind === "human",
+                            ).length ?? 0) +
+                              (room()?.room.botCount ?? 0) <
+                              2))
                       }
                     >
                       {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game →"}
@@ -978,6 +1301,7 @@ export function App() {
           </section>
         </Show>
       </Show>
+      <ToastViewport />
     </main>
   );
 }

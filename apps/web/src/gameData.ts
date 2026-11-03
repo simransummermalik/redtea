@@ -6,12 +6,14 @@ export async function loadWordCatalog() {
     fetch("/words.txt"),
     fetch("/fragments.json"),
   ]);
-  if (!wordsResponse.ok || !fragmentsResponse.ok) {
-    throw new Error("Could not load the game dictionary");
-  }
+  if (!wordsResponse.ok)
+    throw new Error(`The word list could not be loaded (HTTP ${wordsResponse.status})`);
+  if (!fragmentsResponse.ok)
+    throw new Error(`The word fragments could not be loaded (HTTP ${fragmentsResponse.status})`);
   const [wordsText, fragmentIndex] = await Promise.all([
     wordsResponse.text(),
     fragmentsResponse.json() as Promise<FragmentEntry[]>,
   ]);
+  if (!wordsText.trim()) throw new Error("The word list is empty");
   return createWordCatalog(wordsText.trim().split(/\r?\n/), fragmentIndex);
 }
