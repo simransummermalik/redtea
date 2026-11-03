@@ -1,20 +1,10 @@
-import type {
-  BlackPlayerState,
-  GamePlayer,
-  MixConfig,
-  RoundModeEffect,
-  RoundResult,
-  RoundSubmission,
-} from "@redtea/engine";
+import type { GamePlayer, MixConfig } from "@redtea/engine";
 import {
   defaultBlackConfig,
   defaultGreenConfig,
   defaultMixConfig,
   defaultRedConfig,
   defaultYellowConfig,
-  getRoundTimeRemainingMs,
-  getTimeRemainingMs,
-  mixTimeRemainingMs,
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
@@ -39,6 +29,7 @@ import {
   RemoteConnection,
   type RoomView,
 } from "./connection";
+import { type EffectPulse, GameScreen } from "./game/GameScreen";
 import { loadWordCatalog } from "./gameData";
 import "./styles.css";
 
@@ -59,15 +50,6 @@ type UiModeConfig = {
   allowWordReuse: boolean;
   ignoreInvalidWords: boolean;
   mixConfig?: MixConfig;
-};
-type SubmissionFeedItem = {
-  id: number;
-  playerId: string;
-  text: string;
-  validWords: readonly string[];
-  invalidWords: readonly string[];
-  round: number;
-  at: number;
 };
 
 const teaModes: { id: TeaMode; label: string; title: string; desc: string; glyph: string }[] = [
@@ -202,23 +184,6 @@ function initialUiConfigs(): Record<TeaMode, UiModeConfig> {
   };
 }
 
-function roundResult(state: AnyGameState | null): RoundResult | null {
-  if (!state) return null;
-  if (state.mode === "black") return state.lastRoundResult as RoundResult | null;
-  if (state.mode === "mix") return null;
-  return state.roundResults.at(-1) ?? null;
-}
-
-function roundNumber(state: AnyGameState | null): number {
-  if (!state) return 0;
-  if (state.mode === "mix") return state.roundNumber;
-  return state.mode === "black" ? state.turnNumber : state.roundNumber;
-}
-
-function seconds(milliseconds: number): string {
-  return (milliseconds / 1_000).toFixed(1);
-}
-
 export function App() {
   const [mode, setMode] = createSignal<TeaMode>("red");
   const [showModeIntro, setShowModeIntro] = createSignal(true);
@@ -235,7 +200,7 @@ export function App() {
   const [lobbyError, setLobbyError] = createSignal("");
   const [entry, setEntry] = createSignal("");
   const [clock, setClock] = createSignal(0);
-  const [feed, setFeed] = createSignal<SubmissionFeedItem[]>([]);
+  const [pulse, setPulse] = createSignal<EffectPulse>({ seq: 0, effects: [] });
   const [, setLoadError] = createSignal("");
   const [wordCatalog, setWordCatalog] = createSignal<Awaited<
     ReturnType<typeof loadWordCatalog>
@@ -284,42 +249,6 @@ export function App() {
     else updateConfig("pointsToWin", points);
   }
 
-  function recordEffects(
-    effects: readonly (RoundModeEffect | { type: string; [key: string]: unknown })[],
-  ): void {
-    const current = game();
-    if (!current) return;
-    const items: SubmissionFeedItem[] = [];
-    for (const effect of effects) {
-      if (effect.type === "submission-recorded") {
-        const submission = effect.submission as RoundSubmission;
-        items.push({
-          id: performance.now() + items.length,
-          playerId: submission.playerId,
-          text: submission.text,
-          validWords: submission.validWords,
-          invalidWords: submission.invalidWords,
-          round: Number(effect.round),
-          at: Number(submission.submittedAt),
-        });
-      } else if (effect.type === "word-accepted") {
-        items.push({
-          id: performance.now() + items.length,
-          playerId: String(effect.playerId),
-          text: String(effect.word),
-          validWords: [String(effect.word)],
-          invalidWords: [],
-          round:
-            current.mode === "black"
-              ? (current.lastRoundResult?.round ?? current.turnNumber)
-              : current.roundNumber,
-          at: clock(),
-        });
-      }
-    }
-    if (items.length) setFeed((currentFeed) => [...items, ...currentFeed].slice(0, 40));
-  }
-
   function subscribeConnection(active: GameConnection): void {
     unsubscribeActive();
     unsubscribeActive = active.subscribe((update) => {
@@ -329,7 +258,8 @@ export function App() {
       if (update.room) setShowModeIntro(false);
       setLobbyError(update.error ?? "");
       setConnectionState(update.connectionState);
-      if (update.effects.length) recordEffects(update.effects);
+      if (update.effects.length)
+        setPulse((previous) => ({ seq: previous.seq + 1, effects: update.effects }));
     });
   }
 
@@ -390,11 +320,7 @@ export function App() {
     setConnection(local);
     setRoom(undefined);
     setGame(null);
-    setFeed([]);
-    local.subscribe((update) => {
-      setClock(update.now);
-      setGame(update.game);
-    });
+    subscribeConnection(local);
   }
 
   function backToSetup(): void {
@@ -447,7 +373,6 @@ export function App() {
       config: selectedEngineConfig(selected, settings),
     });
     setEntry("");
-    setFeed([]);
     requestAnimationFrame(() => inputRef?.focus());
   }
 
@@ -524,84 +449,6 @@ export function App() {
     });
   });
 
-  const remainingMs = () => {
-    const current = game();
-    if (!current) return 0;
-    if (current.mode === "mix") return mixTimeRemainingMs(current, clock());
-    return current.mode === "black"
-      ? getTimeRemainingMs(current, clock())
-      : getRoundTimeRemainingMs(current, clock());
-  };
-  const roundDuration = () => {
-    const current = game();
-    if (current?.mode === "mix" && current.status === "intermission")
-      return current.config.intermissionMs;
-    if (current?.mode === "mix")
-      return current.currentTea
-        ? current.config[`${current.currentTea}TimeMs`] || current.config.roundTimeMs
-        : 0;
-    return current?.mode === "black" ? current.turnDurationMs : (current?.config.roundTimeMs ?? 0);
-  };
-  const currentPlayer = () => {
-    const current = activeGame();
-    if (current?.mode !== "black") return null;
-    return current.players.find(({ id }) => id === current.currentPlayerId) ?? null;
-  };
-  const canHumanSubmit = () => {
-    const current = activeGame();
-    if (current?.status !== "playing") return false;
-    const selfId = connection().playerId();
-    if (current.mode === "black") return current.currentPlayerId === selfId;
-    return current.mode === "green" || !current.submittedPlayerIds.includes(selfId);
-  };
-  const statusText = () => {
-    const current = game();
-    if (!current) return "Ready when you are";
-    if (current.status === "finished") return "GAME OVER";
-    if (current.mode === "mix")
-      return current.status === "intermission"
-        ? `NEXT UP · ${current.upcomingTea?.toUpperCase()} TEA`
-        : `${current.currentTea?.toUpperCase() ?? "MIX"} · ROUND ${current.roundNumber}`;
-    if (current.mode === "black")
-      return currentPlayer()?.name === "You"
-        ? "YOUR TURN"
-        : `${currentPlayer()?.name ?? "BOT"}'S TURN`;
-    return `${current.mode.toUpperCase()} · ROUND ${current.roundNumber}`;
-  };
-  const result = () => roundResult(game());
-  const mixResult = () => {
-    const current = game();
-    return current?.mode === "mix" ? current.roundResults.at(-1) : null;
-  };
-  const playerName = (id: string | null) =>
-    game()?.players.find(({ id: playerId }) => playerId === id)?.name ?? "No one";
-  const completedCount = () => {
-    const current = game();
-    if (!current) return 0;
-    return current.mode === "black" ? current.usedWords.length : current.roundResults.length;
-  };
-  const pointsTarget = () => {
-    const current = game();
-    return current?.mode === "mix"
-      ? current.config.pointsToWin
-      : current && current.mode !== "black"
-        ? current.config.pointsToWin
-        : "last player";
-  };
-  const activePlayer = (playerId: string) => {
-    const current = activeGame();
-    return current?.mode === "black" && current.currentPlayerId === playerId;
-  };
-  const resultTitle = () => {
-    const mixLast = mixResult();
-    if (mixLast)
-      return mixLast.winnerId
-        ? `${playerName(mixLast.winnerId)} takes the ${mixLast.tea} round`
-        : `${mixLast.tea} round ends with no point`;
-    const last = result();
-    if (!last) return "No round played yet";
-    return last.winnerId ? `${playerName(last.winnerId)} takes the point` : "No point this round";
-  };
   function activeGame() {
     const current = game();
     return current?.mode === "mix" ? current.activeGame : current;
@@ -612,22 +459,17 @@ export function App() {
       ? ((current.status === "intermission" ? current.upcomingTea : current.currentTea) ?? "mix")
       : (current?.mode ?? mode());
   };
-  const activeTea = () => {
-    const current = game();
-    return current?.mode === "mix" ? current.currentTea : current?.mode;
-  };
-  const upcomingTea = () => {
-    const current = game();
-    return current?.mode === "mix" ? current.upcomingTea : null;
-  };
 
   return (
     <main
       class="page"
-      classList={{ "mode-intro-page": !game() && showModeIntro() && !room() }}
+      classList={{
+        "mode-intro-page": !game() && showModeIntro() && !room(),
+        "brew-page": Boolean(game()),
+      }}
       data-tea={teaTheme()}
     >
-      <Show when={game() || !showModeIntro() || room()}>
+      <Show when={!game() && (!showModeIntro() || room())}>
         <header class="topbar">
           <div class="brand-lockup">
             <span class="brand-mark" aria-hidden="true">
@@ -649,301 +491,23 @@ export function App() {
       <Show
         when={!game()}
         fallback={
-          <section class="game-layout" aria-label={`${activeTea()} Tea game`}>
-            <div class="game-column">
-              <div class="round-heading">
-                <div>
-                  <p class="eyebrow">
-                    {room() ? "Multiplayer room" : "Solo mode"} ·{" "}
-                    {game()?.mode === "mix" ? "Mix" : game()?.mode} Tea
-                  </p>
-                  <h2>
-                    {game()?.mode === "black" || (game()?.mode === "mix" && activeTea() === "black")
-                      ? "Keep the word moving."
-                      : "Find your winning word."}
-                  </h2>
-                </div>
-                <span class="live-pill">
-                  <span />
-                  {connectionState() === "reconnecting" ? "RECONNECTING…" : statusText()}
-                </span>
-              </div>
-
-              <section class="fragment-card" aria-live="polite">
-                <div class="fragment-label">
-                  {game()?.mode === "mix" && game()?.status === "intermission"
-                    ? "Next round"
-                    : "Find a word containing"}
-                </div>
-                <div
-                  class="fragment"
-                  role="status"
-                  aria-label={`Fragment ${activeGame()?.fragment ?? "—"}`}
-                >
-                  {game()?.mode === "mix" && game()?.status === "intermission"
-                    ? `${upcomingTea()?.toUpperCase()} TEA`
-                    : (activeGame()?.fragment ?? "…")}
-                </div>
-                <div class="fragment-footer">
-                  <span>Round {roundNumber(game())}</span>
-                  <span>{completedCount()} completed</span>
-                </div>
-              </section>
-
-              <section class="timer-panel" aria-label="Round countdown">
-                <div class="timer-topline">
-                  <span>
-                    {game()?.mode === "black" || (game()?.mode === "mix" && activeTea() === "black")
-                      ? statusText()
-                      : game()?.mode === "mix" && game()?.status === "intermission"
-                        ? "Next round begins in"
-                        : "Round closes in"}
-                    <strong>
-                      {seconds(remainingMs())}
-                      <small>s</small>
-                    </strong>
-                  </span>
-                </div>
-                <div
-                  class="timer-track"
-                  role="progressbar"
-                  aria-valuemin="0"
-                  aria-valuemax={roundDuration()}
-                  aria-valuenow={remainingMs()}
-                >
-                  <div
-                    class="timer-fill"
-                    classList={{ urgent: remainingMs() <= 3_000 }}
-                    style={{
-                      width: `${roundDuration() ? (remainingMs() / roundDuration()) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-                <div class="timer-caption">
-                  <span>
-                    {activeTea() === "green"
-                      ? "First valid word wins"
-                      : "One point for the round winner"}
-                  </span>
-                  <span>Target {pointsTarget()}</span>
-                </div>
-              </section>
-
-              <form class="answer-form" onSubmit={submit}>
-                <label for="word-entry">
-                  {activeTea() === "yellow" ? "Your one message this round" : "Your word"}
-                </label>
-                <div class="input-wrap">
-                  <Show
-                    when={activeTea() === "yellow"}
-                    fallback={
-                      <input
-                        ref={(element) => {
-                          inputRef = element;
-                        }}
-                        id="word-entry"
-                        type="text"
-                        autocomplete="off"
-                        autocapitalize="none"
-                        spellcheck={false}
-                        placeholder={canHumanSubmit() ? "Type fast…" : "Round in progress…"}
-                        value={entry()}
-                        onInput={(event) => setEntry(event.currentTarget.value)}
-                        readonly={!canHumanSubmit()}
-                      />
-                    }
-                  >
-                    <textarea
-                      ref={(element) => {
-                        inputRef = element;
-                      }}
-                      id="word-entry"
-                      rows="2"
-                      autocomplete="off"
-                      autocapitalize="none"
-                      spellcheck={false}
-                      placeholder={
-                        canHumanSubmit()
-                          ? "Several words, separated by spaces or commas…"
-                          : "Message submitted"
-                      }
-                      value={entry()}
-                      onInput={(event) => setEntry(event.currentTarget.value)}
-                      readonly={!canHumanSubmit()}
-                    />
-                  </Show>
-                  <button class="submit-button" type="submit" disabled={!canHumanSubmit()}>
-                    Submit <span aria-hidden="true">↵</span>
-                  </button>
-                </div>
-                <p class="feedback" id="feedback" aria-live="polite">
-                  {game()?.status === "finished"
-                    ? `${playerName(game()?.winnerId ?? null)} wins the game.`
-                    : activeTea() === "yellow"
-                      ? "Repeated words in your message count once."
-                      : activeTea() === "red"
-                        ? "Your longest valid word counts."
-                        : activeTea() === "green"
-                          ? "Keep trying until someone finds a valid word."
-                          : "Two missed turns and you’re out."}
-                </p>
-              </form>
-
-              <div class="game-actions">
-                <button class="restart-button" type="button" onClick={backToSetup}>
-                  Back to setup
-                </button>
-                <p>
-                  {activeTea() === "black"
-                    ? "Words cannot be reused."
-                    : "Bot plays appear in the live feed."}
-                </p>
-              </div>
-              <Show when={game()?.status === "finished"}>
-                <div class="winner-banner" role="status">
-                  <span aria-hidden="true">✦</span>
-                  <strong>{playerName(game()?.winnerId ?? null)} wins the game.</strong>
-                </div>
-              </Show>
-              <section class="round-result-card" aria-live="polite">
-                <p class="eyebrow">Last round</p>
-                <h3>{resultTitle()}</h3>
-                <Show when={mixResult()}>
-                  <p class="muted-copy">
-                    The table moves on to the announced tea after a short pause.
-                  </p>
-                </Show>
-                <Show
-                  when={result()?.submissions.length}
-                  fallback={
-                    <p class="muted-copy">Submissions will appear here when the round ends.</p>
-                  }
-                >
-                  <ul class="result-submissions">
-                    <For each={result()?.submissions ?? []}>
-                      {(submission) => (
-                        <li>
-                          <strong>{playerName(submission.playerId)}</strong>
-                          <span>
-                            {submission.validWords.length
-                              ? submission.validWords.join(", ")
-                              : submission.text || "No submission"}
-                          </span>
-                          <small>
-                            {submission.score} {submission.score === 1 ? "word" : "words"}
-                          </small>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </Show>
-              </section>
-            </div>
-
-            <aside class="side-column">
-              <section class="players-card">
-                <div class="card-heading">
-                  <div>
-                    <p class="eyebrow">At the table</p>
-                    <h3>Scoreboard</h3>
-                  </div>
-                  <span class="player-count">{game()?.players.length ?? 0}</span>
-                </div>
-                <ul class="player-list">
-                  <For each={game()?.players ?? []}>
-                    {(player) => (
-                      <li
-                        class="player-row"
-                        classList={{
-                          active: activePlayer(player.id),
-                          eliminated: "alive" in player && !player.alive,
-                        }}
-                      >
-                        <span class={`avatar ${player.kind}`} aria-hidden="true">
-                          {player.kind === "human" ? "Y" : "✳"}
-                        </span>
-                        <div class="player-name">
-                          <strong>{player.name}</strong>
-                          <small>
-                            {player.kind === "human"
-                              ? player.id === connection().playerId()
-                                ? "You"
-                                : "Player"
-                              : `Skill ${Math.round(player.skill * 100)}%`}
-                          </small>
-                        </div>
-                        <div class="player-stats">
-                          <Show when={"hp" in player}>
-                            <small>{(player as BlackPlayerState).hp} HP</small>
-                          </Show>
-                          <strong>
-                            {player.points}
-                            <small> pt</small>
-                          </strong>
-                        </div>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </section>
-
-              <section class="feed-card">
-                <div class="card-heading">
-                  <div>
-                    <p class="eyebrow">Live table</p>
-                    <h3>Submissions</h3>
-                  </div>
-                  <span class="feed-live">
-                    <i /> LIVE
-                  </span>
-                </div>
-                <Show
-                  when={feed().length}
-                  fallback={<p class="muted-copy">Bot plays show up here as they happen.</p>}
-                >
-                  <ul class="submission-feed">
-                    <For each={feed()}>
-                      {(item) => (
-                        <li>
-                          <span class={`feed-marker ${item.validWords.length ? "good" : "bad"}`} />
-                          <div>
-                            <strong>{playerName(item.playerId)}</strong>
-                            <p>{item.text || "No word"}</p>
-                            <small>
-                              {item.validWords.length
-                                ? `${item.validWords.length} valid`
-                                : "No valid words"}{" "}
-                              · round {item.round}
-                            </small>
-                          </div>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </Show>
-              </section>
-
-              <section class="rules-card">
-                <span class="rules-star" aria-hidden="true">
-                  ✦
-                </span>
-                <div>
-                  <h3>{game()?.mode} Tea rules</h3>
-                  <p>
-                    {game()?.mode === "mix" && activeTea() === "black"
-                      ? "The bomb passes between living players. The first timeout costs 1 HP and ends the Black sequence."
-                      : activeTea() === "green"
-                        ? "First valid word wins. Words cannot be reused."
-                        : activeTea() === "red"
-                          ? "Longest valid word wins. Ties go to the earliest submission."
-                          : activeTea() === "yellow"
-                            ? "Send one message with several words. Ties go to the earliest message."
-                            : "Play a valid word before the timer runs out. Miss twice and you’re eliminated."}
-                  </p>
-                </div>
-              </section>
-            </aside>
-          </section>
+          <GameScreen
+            game={game() as AnyGameState}
+            room={room()}
+            selfId={connection().playerId()}
+            clock={clock()}
+            entry={entry()}
+            onEntry={setEntry}
+            onSubmit={submit}
+            inputRef={(element) => {
+              inputRef = element;
+            }}
+            connectionState={connectionState()}
+            notice={lobbyError()}
+            pulse={pulse()}
+            onLeave={backToSetup}
+            onPlayAgain={room() ? undefined : startGame}
+          />
         }
       >
         <Show when={showModeIntro() && !room()}>
@@ -1405,7 +969,7 @@ export function App() {
         </Show>
       </Show>
 
-      <Show when={game() || !showModeIntro() || room()}>
+      <Show when={!game() && (!showModeIntro() || room())}>
         <footer class="footer">
           <span>BREWED FOR WORD LOVERS</span>
           <span>

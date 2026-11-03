@@ -1,0 +1,1702 @@
+/* In-game screen: a tea-coloured table with a giant glass mug, a fox, and paper cards outlined in fox ink. */
+
+.page.brew-page {
+  padding: 0;
+  background: #0b0b0b;
+}
+.page.brew-page::before {
+  content: none;
+}
+
+.brew {
+  --ink: #4a2a24;
+  --paper: #fff6e6;
+  --paper-2: #f7ead2;
+  --serif: "Times New Roman", Times, serif;
+  --round: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --mono: "Courier New", Courier, ui-monospace, monospace;
+  --hand: "Marker Felt", "Chalkboard SE", "Comic Sans MS", cursive;
+  --bg: #b52f3e;
+  --bg-deep: #861f2d;
+  --liquid: #cf3a45;
+  --liquid-top: #f2716a;
+  --liquid-deep: #8f1d2a;
+  --pop: #b52f3e;
+  --leaf: #f39a6c;
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: clip;
+  padding: 18px clamp(14px, 3vw, 44px) 36px;
+  background:
+    radial-gradient(ellipse 55% 45% at 36% 48%, rgb(255 255 255 / 15%), transparent 70%),
+    radial-gradient(circle at 2px 2px, rgb(255 255 255 / 9%) 1.6px, transparent 2.2px) 0 0 / 28px
+    28px,
+    var(--bg);
+  color: #fff;
+  font-family: var(--serif);
+  transition: background-color 0.6s ease;
+}
+.brew[data-tea="green"] {
+  --bg: #237858;
+  --bg-deep: #154f39;
+  --liquid: #8dbf4f;
+  --liquid-top: #c3e483;
+  --liquid-deep: #4a8628;
+  --pop: #1f6e50;
+  --leaf: #c3e483;
+}
+.brew[data-tea="yellow"] {
+  --bg: #bd8d17;
+  --bg-deep: #87620a;
+  --liquid: #f4b72c;
+  --liquid-top: #ffdd75;
+  --liquid-deep: #c4860c;
+  --pop: #8a5f00;
+  --leaf: #ffe39a;
+}
+.brew[data-tea="black"] {
+  --bg: #0b0b0b;
+  --bg-deep: #000;
+  --liquid: #6e3f24;
+  --liquid-top: #a06a44;
+  --liquid-deep: #2f160b;
+  --pop: #3a2a24;
+  --leaf: #8b6c4c;
+}
+.brew[data-tea="mix"] {
+  --bg: #75608a;
+  --bg-deep: #4e3c62;
+  --liquid: #a58bc4;
+  --liquid-top: #cdb8e6;
+  --liquid-deep: #5f4680;
+  --pop: #5f4680;
+  --leaf: #e2d3f3;
+}
+
+.brew .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.brew button {
+  cursor: pointer;
+}
+.brew button:focus-visible,
+.brew input:focus-visible,
+.brew textarea:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+/* Token sizes used across the bench, splashes and confetti. */
+.heart-svg {
+  width: 17px;
+  height: 16px;
+  overflow: visible;
+}
+.cube-svg {
+  width: 21px;
+  height: 21px;
+  color: #c4ad88;
+}
+
+/* ---------------------------- falling leaves ---------------------------- */
+
+.brew-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.brew-fall {
+  position: absolute;
+  top: -60px;
+  opacity: 0.5;
+  animation: brew-leaf-fall linear infinite;
+}
+.leaf-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@keyframes brew-leaf-fall {
+  0% {
+    transform: translate(0, -60px) rotate(0deg);
+  }
+  50% {
+    transform: translate(46px, 55vh) rotate(200deg);
+  }
+  100% {
+    transform: translate(-24px, 118vh) rotate(420deg);
+  }
+}
+
+.brew-urgent::after {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  box-shadow: inset 0 0 140px 40px rgb(255 214 120 / 32%);
+  content: "";
+  pointer-events: none;
+  animation: brew-heat 0.45s ease-in-out infinite alternate;
+}
+@keyframes brew-heat {
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* -------------------------------- top bar ------------------------------- */
+
+.brew-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  max-width: 1320px;
+  margin: 0 auto 6px;
+}
+.brew-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 25px;
+  letter-spacing: -0.01em;
+}
+.brew-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--pop);
+  font-size: 19px;
+  box-shadow: 0 3px 0 var(--ink);
+  transform: rotate(-7deg);
+}
+.brew-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brew-pill-warn {
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: #fff3a8;
+  color: var(--ink);
+  font: 400 15px / 1 var(--serif);
+  animation: brew-pulse 1s ease-in-out infinite alternate;
+}
+.brew-room {
+  font-size: 16px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.brew-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1.5px solid rgb(255 255 255 / 75%);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font: 400 15px / 1 var(--serif);
+  white-space: nowrap;
+}
+.brew-leave:hover {
+  background: rgb(255 255 255 / 14%);
+}
+
+/* --------------------------------- layout ------------------------------- */
+
+.brew-main {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+  gap: clamp(20px, 3vw, 44px);
+  align-items: start;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.brew-stage-col {
+  min-width: 0;
+}
+.brew-heading {
+  margin-top: 8px;
+  text-align: center;
+}
+.brew-heading h2 {
+  margin: 0;
+  font: italic 400 clamp(36px, 4.6vw, 60px) / 1 var(--serif);
+  letter-spacing: -0.02em;
+  text-shadow: 0 3px 0 rgb(0 0 0 / 16%);
+}
+.brew-subline {
+  margin: 8px 0 0;
+  font-size: 18px;
+  opacity: 0.85;
+}
+
+/* --------------------------------- stage -------------------------------- */
+
+.brew-stage {
+  position: relative;
+  width: min(100%, calc(56svh * 660 / 470));
+  margin: 18px auto 0;
+  aspect-ratio: 660 / 470;
+  container-type: inline-size;
+}
+.mug-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.fox-layer {
+  z-index: 2;
+  filter: drop-shadow(3px 0 0 var(--paper)) drop-shadow(-3px 0 0 var(--paper))
+    drop-shadow(0 3px 0 var(--paper)) drop-shadow(0 -3px 0 var(--paper))
+    drop-shadow(0 7px 0 rgb(0 0 0 / 16%));
+}
+.mug-front {
+  z-index: 1;
+}
+
+.tea-surface {
+  fill: var(--liquid-top);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.tea-front {
+  fill: var(--liquid);
+  opacity: 0.58;
+}
+.tea-bubble {
+  opacity: 0;
+  animation: brew-bubble-rise var(--bubble-speed, var(--bubble-base)) ease-in infinite;
+}
+.mug-back.boiling .tea-bubble {
+  --bubble-speed: 0.75s;
+  stroke-width: 3;
+}
+.mug-back.boiling .tea-surface {
+  animation: brew-boil 0.22s ease-in-out infinite alternate;
+}
+@keyframes brew-bubble-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  15% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(calc(var(--rise) * -1));
+  }
+}
+@keyframes brew-boil {
+  to {
+    transform: scaleY(1.45) translateY(-2px);
+  }
+}
+.tea-leaf {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brew-leaf-drift 7s ease-in-out infinite alternate;
+}
+@keyframes brew-leaf-drift {
+  to {
+    transform: translate(18px, -14px) rotate(70deg);
+  }
+}
+.steam-wisp {
+  opacity: 0;
+  animation: brew-steam 2.8s ease-out infinite;
+}
+.steam-2 {
+  animation-delay: 0.9s;
+}
+.steam-3 {
+  animation-delay: 1.8s;
+}
+.mug-back.boiling .steam-wisp {
+  animation-duration: 1.1s;
+  stroke-width: 8;
+}
+@keyframes brew-steam {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  35% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-34px);
+  }
+}
+
+.mug-tag {
+  transform-box: view-box;
+  transform-origin: 458px 132px;
+  animation: brew-tag-swing 3.4s ease-in-out infinite;
+}
+.mug-tag.urgent {
+  animation: brew-tag-panic 0.16s linear infinite;
+}
+.mug-tag-tea {
+  fill: var(--ink);
+  font: 700 10px var(--mono);
+  letter-spacing: 2px;
+  text-anchor: middle;
+  text-transform: uppercase;
+}
+.mug-tag-time {
+  fill: var(--ink);
+  font: 700 26px var(--serif);
+  text-anchor: middle;
+}
+.mug-tag.urgent .mug-tag-time {
+  fill: #e5484d;
+}
+@keyframes brew-tag-swing {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes brew-tag-panic {
+  0%,
+  100% {
+    transform: rotate(-9deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+
+/* ---------------------------- sugar-cube tiles ---------------------------- */
+
+.brew-tiles {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  gap: 1.5cqw;
+  transform: translate(-50%, -66%);
+  transition: top 90ms linear;
+}
+.brew-tile {
+  width: 11.4cqw;
+  height: 11.4cqw;
+  animation: brew-tile-drop 0.75s cubic-bezier(0.3, 1.45, 0.5, 1) both;
+  animation-delay: calc(var(--i) * 90ms);
+}
+.brew-tile-face {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: max(2.5px, 0.55cqw) solid var(--ink);
+  border-radius: 1.9cqw;
+  background: linear-gradient(155deg, #fff 0 52%, #f3e6cf);
+  color: var(--ink);
+  font: 700 7.6cqw / 1 var(--serif);
+  text-transform: uppercase;
+  box-shadow:
+    inset 0 -1cqw 0 #e3d0ae,
+    0 0.9cqw 0 var(--ink);
+  transform: rotate(var(--tilt));
+  animation: brew-tile-bob 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.7s);
+}
+.brew-urgent .brew-tile-face {
+  animation-duration: 0.42s;
+}
+@keyframes brew-tile-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-40cqw) rotate(-24deg);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(2.4cqw) rotate(4deg);
+  }
+  78% {
+    transform: translateY(-1.2cqw);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes brew-tile-bob {
+  0%,
+  100% {
+    transform: rotate(var(--tilt)) translateY(0);
+  }
+  50% {
+    transform: rotate(calc(var(--tilt) * -0.6)) translateY(-1.1cqw);
+  }
+}
+
+/* ---------------------------------- fox --------------------------------- */
+
+.fox-bounce,
+.fox-breath,
+.fox-tail,
+.fox-ear,
+.fox-blink,
+.fox-sparkle,
+.fox-jitter {
+  transform-box: fill-box;
+}
+.fox-bounce {
+  transform-origin: 50% 100%;
+}
+.fox-breath {
+  transform-origin: 50% 100%;
+  animation: brew-fox-breath 3s ease-in-out infinite;
+}
+.fox-tail {
+  transform-origin: 8% 92%;
+  animation: brew-fox-tail 3.4s ease-in-out infinite;
+}
+.fox-ear {
+  transition: transform 0.25s ease;
+}
+.fox-ear-l {
+  transform-origin: 85% 95%;
+}
+.fox-ear-r {
+  transform-origin: 15% 95%;
+}
+.fox-blink {
+  transform-origin: center;
+  animation: brew-fox-blink 4.6s infinite;
+}
+.fox-mood-calm .fox-ear-r {
+  animation: brew-ear-twitch 5.5s infinite;
+}
+.fox-mood-panic .fox-ear-l,
+.fox-mood-sad .fox-ear-l {
+  transform: rotate(-36deg);
+}
+.fox-mood-panic .fox-ear-r,
+.fox-mood-sad .fox-ear-r {
+  transform: rotate(36deg);
+}
+.fox-mood-oops .fox-ear-l {
+  transform: rotate(-14deg);
+}
+.fox.fox-mood-happy .fox-bounce {
+  animation: brew-fox-hop 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) 2;
+}
+.fox.fox-mood-party .fox-bounce {
+  animation: brew-fox-hop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) infinite;
+}
+.fox.fox-mood-panic .fox-bounce {
+  animation: brew-fox-shake 0.14s linear infinite;
+}
+.fox.fox-mood-oops .fox-bounce {
+  animation: brew-fox-tilt 0.6s ease-out;
+}
+.fox.fox-mood-sealed .fox-bounce {
+  animation: brew-fox-sway 2.4s ease-in-out infinite;
+}
+.fox-jitter {
+  transform-origin: center;
+  animation: brew-fox-jitter 0.1s linear infinite;
+}
+.fox-sparkle {
+  transform-origin: center;
+  animation: brew-sparkle 0.9s ease-in-out infinite alternate;
+}
+.fox-sweat {
+  animation: brew-sweat 1.1s ease-in infinite;
+}
+.fox-tear {
+  animation: brew-tear 1.4s ease-in infinite;
+}
+.fox-tear-late {
+  animation-delay: 0.6s;
+}
+.fox-grumble {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 3.5px;
+  paint-order: stroke;
+  font: 900 40px var(--serif);
+  animation: brew-pulse 0.3s ease-in-out infinite alternate;
+}
+.fox-note {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 3px;
+  paint-order: stroke;
+  font: 700 30px var(--serif);
+  animation: brew-note 1.8s ease-in-out infinite;
+}
+.fox-note-late {
+  animation-delay: 0.7s;
+}
+.fox-hat {
+  animation: brew-hat 0.7s ease-in-out infinite alternate;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+@keyframes brew-fox-breath {
+  50% {
+    transform: scale(1.015, 1.025);
+  }
+}
+@keyframes brew-fox-tail {
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes brew-fox-blink {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes brew-ear-twitch {
+  0%,
+  86%,
+  100% {
+    transform: rotate(0deg);
+  }
+  89% {
+    transform: rotate(12deg);
+  }
+  92% {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes brew-fox-hop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  15% {
+    transform: translateY(0) scale(1.06, 0.92);
+  }
+  50% {
+    transform: translateY(-30px) scale(0.96, 1.05);
+  }
+}
+@keyframes brew-fox-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px) rotate(-1deg);
+  }
+  75% {
+    transform: translateX(3px) rotate(1deg);
+  }
+}
+@keyframes brew-fox-tilt {
+  30% {
+    transform: rotate(-7deg);
+  }
+  60% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes brew-fox-sway {
+  50% {
+    transform: rotate(-3deg);
+  }
+}
+@keyframes brew-fox-jitter {
+  50% {
+    transform: translate(1.5px, -1px);
+  }
+}
+@keyframes brew-sparkle {
+  from {
+    transform: scale(0.6) rotate(0deg);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(1.15) rotate(25deg);
+    opacity: 1;
+  }
+}
+@keyframes brew-sweat {
+  0% {
+    opacity: 0;
+    transform: translate(0, -6px);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(6px, 26px);
+  }
+}
+@keyframes brew-tear {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+}
+@keyframes brew-note {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(4px) rotate(-8deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-8px) rotate(8deg);
+  }
+}
+@keyframes brew-hat {
+  to {
+    transform: rotate(-8deg);
+  }
+}
+@keyframes brew-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+
+/* --------------------------- speech bubble ---------------------------- */
+
+.brew-bubble {
+  position: absolute;
+  z-index: 4;
+  right: -1%;
+  bottom: 58%;
+  max-width: min(27cqw, 220px);
+  padding: 9px 13px;
+  border: 2.5px solid var(--ink);
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 clamp(12px, 2.25cqw, 16px) / 1.2 var(--round);
+  text-align: center;
+  box-shadow: 0 4px 0 var(--ink);
+  transform-origin: 70% 100%;
+  animation: brew-bubble-pop 0.38s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.brew-bubble::after {
+  position: absolute;
+  bottom: -11px;
+  left: 58%;
+  width: 16px;
+  height: 16px;
+  border-right: 2.5px solid var(--ink);
+  border-bottom: 2.5px solid var(--ink);
+  background: inherit;
+  content: "";
+  transform: rotate(45deg) skew(8deg, 8deg);
+}
+.brew-bubble-good {
+  background: #fff3a8;
+}
+.brew-bubble-bad {
+  background: #ffd0c8;
+}
+@keyframes brew-bubble-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+}
+
+/* ------------------------------- splashes ------------------------------- */
+
+.brew-splash {
+  position: absolute;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.brew-splash-cube {
+  position: absolute;
+  top: -5cqw;
+  left: -2.7cqw;
+  width: 5.4cqw;
+  animation:
+    brew-cube-drop 0.48s cubic-bezier(0.55, 0, 1, 0.45) both,
+    brew-cube-sink 0.5s 0.48s ease-in forwards;
+}
+.brew-splash-cube .cube-svg {
+  width: 100%;
+  height: auto;
+}
+.brew-splash-ring {
+  position: absolute;
+  top: -1.6cqw;
+  left: -6cqw;
+  width: 12cqw;
+  height: 3.2cqw;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  opacity: 0;
+  animation: brew-ring 0.7s 0.45s ease-out both;
+}
+.brew-splash-drop {
+  position: absolute;
+  top: -1cqw;
+  left: -0.8cqw;
+  width: 1.6cqw;
+  height: 1.6cqw;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--liquid-top);
+  opacity: 0;
+  animation: brew-drop-fly 0.65s 0.45s ease-out both;
+}
+.brew-splash-drop.d1 {
+  --dx: -7cqw;
+}
+.brew-splash-drop.d2 {
+  --dx: 1cqw;
+}
+.brew-splash-drop.d3 {
+  --dx: 7cqw;
+}
+@keyframes brew-cube-drop {
+  from {
+    transform: translateY(-42cqw) rotate(-50deg);
+  }
+  to {
+    transform: translateY(0) rotate(20deg);
+  }
+}
+@keyframes brew-cube-sink {
+  to {
+    opacity: 0;
+    transform: translateY(5cqw) rotate(40deg);
+  }
+}
+@keyframes brew-ring {
+  0% {
+    opacity: 1;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+@keyframes brew-drop-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(calc(var(--dx) * 0.7), -8cqw);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), -1cqw);
+  }
+}
+
+/* ------------------------------- tea wheel ------------------------------ */
+
+.brew-wheel {
+  position: absolute;
+  z-index: 3;
+  top: 53%;
+  left: 44%;
+  width: 34cqw;
+  filter: drop-shadow(0 6px 0 var(--ink));
+  transform: translate(-50%, -50%);
+  animation: brew-wheel-in 0.3s ease-out both;
+}
+@keyframes brew-wheel-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+.tea-wheel {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.tea-wheel-spin {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: brew-wheel-spin 1.05s cubic-bezier(0.15, 0.75, 0.25, 1) both;
+}
+.tea-wheel-label {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 3px;
+  paint-order: stroke;
+  font: 700 13px var(--mono);
+  letter-spacing: 1px;
+  text-anchor: middle;
+}
+.tea-wheel-hub {
+  fill: var(--ink);
+  font: 700 22px var(--serif);
+  text-anchor: middle;
+}
+@keyframes brew-wheel-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(var(--land));
+  }
+}
+
+/* Small screens get a bigger countdown than the teabag tag can hold. */
+.brew-clock {
+  display: none;
+}
+
+/* ------------------------------ sticky note ----------------------------- */
+
+.brew-note {
+  position: absolute;
+  z-index: 2;
+  top: 3%;
+  left: -1%;
+  width: min(25cqw, 196px);
+  padding: 13px 13px 15px;
+  border-radius: 2px 2px 16px 2px;
+  background: linear-gradient(170deg, #fff4ad, #ffe773);
+  color: #4d3b10;
+  font: 15px / 1.25 var(--hand);
+  box-shadow: 0 10px 16px rgb(0 0 0 / 20%);
+  transform: rotate(-4deg);
+}
+.brew-note::before {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 58px;
+  height: 20px;
+  background: rgb(255 255 255 / 55%);
+  content: "";
+  transform: translateX(-50%) rotate(3deg);
+}
+.brew-note strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+/* ------------------------------ order slip ------------------------------ */
+
+.brew-order {
+  position: relative;
+  z-index: 3;
+  width: min(100%, 700px);
+  margin: 4px auto 0;
+}
+.brew-order-label {
+  display: block;
+  margin: 0 0 8px 8px;
+  font-size: 17px;
+  opacity: 0.9;
+}
+.brew-order-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px;
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow:
+    0 6px 0 var(--ink),
+    0 18px 34px rgb(0 0 0 / 18%);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.brew-order-row:focus-within {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 0 var(--ink),
+    0 0 0 6px rgb(255 255 255 / 28%);
+}
+.brew .brew-order-row input:focus-visible,
+.brew .brew-order-row textarea:focus-visible {
+  outline: none;
+}
+.brew-order-row input,
+.brew-order-row textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 clamp(20px, 2.3vw, 28px) / 1.2 var(--serif);
+  resize: none;
+}
+.brew-order-row input::placeholder,
+.brew-order-row textarea::placeholder {
+  color: #b6a083;
+  font-style: italic;
+}
+.brew-order-locked .brew-order-row {
+  background: #efe1c6;
+}
+.brew-order-locked input,
+.brew-order-locked textarea {
+  cursor: not-allowed;
+}
+.brew-steep {
+  flex: none;
+  padding: 0 22px;
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  background: var(--bg);
+  color: #fff;
+  font: 700 18px / 1 var(--round);
+  box-shadow: 0 4px 0 var(--ink);
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+.brew-steep span {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+.brew-steep:hover:not(:disabled) {
+  transform: translateY(-1px) rotate(-1.5deg);
+}
+.brew-steep:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--ink);
+  transform: translateY(3px);
+}
+.brew-steep:disabled {
+  background: #cdbca1;
+  color: #fff8ea;
+  cursor: default;
+}
+.brew-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 26px;
+  margin-top: 14px;
+  padding: 0 8px;
+  font-size: 17px;
+}
+.brew-hint {
+  opacity: 0.8;
+}
+.brew-hint + .brew-hint::before {
+  margin: 0 9px;
+  content: "·";
+}
+.brew-hint-good {
+  opacity: 1;
+}
+.brew-hint-warn {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #fff3a8;
+  color: var(--ink);
+  opacity: 1;
+}
+
+/* -------------------------------- cards --------------------------------- */
+
+.brew-side {
+  display: grid;
+  gap: 20px;
+  padding-top: 10px;
+}
+.brew-card {
+  position: relative;
+  padding: 16px 16px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 6px 0 var(--ink);
+}
+.brew-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.brew-card-head h3 {
+  margin: 0;
+  font: italic 400 25px / 1 var(--serif);
+}
+.brew-muted {
+  margin: 4px 0 2px;
+  color: #8d7556;
+  font: italic 16px / 1.4 var(--serif);
+}
+
+/* bench */
+.brew-bench {
+  transform: rotate(-0.6deg);
+}
+.brew-seats {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brew-seat {
+  position: relative;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px 8px 8px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: var(--paper-2);
+  transition: background 0.2s ease;
+}
+.brew-seat-me {
+  border-color: var(--ink);
+  border-style: dashed;
+  background: #fff;
+}
+.brew-seat-hot {
+  border-style: solid;
+  border-color: var(--ink);
+  background: #ffe2c2;
+  animation: brew-seat-heat calc(0.55s - var(--heat) * 0.4s) linear infinite;
+}
+.brew-seat-out {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+.brew-seat-hurt {
+  animation: brew-seat-hurt 0.5s ease-out;
+}
+.brew-seat-scored {
+  animation: brew-seat-scored 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes brew-seat-heat {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  25% {
+    transform: translateX(calc(var(--heat) * -2.5px)) rotate(calc(var(--heat) * -0.7deg));
+  }
+  75% {
+    transform: translateX(calc(var(--heat) * 2.5px)) rotate(calc(var(--heat) * 0.7deg));
+  }
+}
+@keyframes brew-seat-hurt {
+  0%,
+  100% {
+    background: var(--paper-2);
+    transform: translateX(0);
+  }
+  20% {
+    background: #ffb8b0;
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+@keyframes brew-seat-scored {
+  40% {
+    background: #fff3a8;
+    transform: scale(1.04) rotate(-1deg);
+  }
+}
+.brew-seat-avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+.avatar-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.teapot-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.teapot-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brew-fox-blink 3.8s infinite;
+}
+.teapot-bulb {
+  animation: brew-bulb 1.6s ease-in-out infinite alternate;
+}
+.teapot-thinking .teapot-bulb {
+  animation-duration: 0.25s;
+}
+.teapot-thinking .teapot-body {
+  animation: brew-fox-shake 0.3s linear infinite;
+}
+.teapot-happy .teapot-body {
+  animation: brew-fox-hop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 2;
+}
+.teapot-hurt .teapot-body {
+  animation: brew-fox-tilt 0.5s ease-out;
+}
+.teapot-look {
+  animation: brew-look 1.2s ease-in-out infinite alternate;
+}
+.teapot-dots circle {
+  animation: brew-pulse 0.5s ease-in-out infinite alternate;
+}
+.teapot-dots circle:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.teapot-dots circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes brew-bulb {
+  to {
+    fill: #fff8d8;
+  }
+}
+@keyframes brew-look {
+  to {
+    transform: translateX(14px);
+  }
+}
+.brew-seat-cup {
+  position: absolute;
+  z-index: 1;
+  top: -18px;
+  left: -12px;
+  width: 32px;
+  animation: brew-cup-bob 0.5s ease-in-out infinite alternate;
+}
+.hot-cup {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.hot-steam {
+  animation: brew-steam 1.2s ease-out infinite;
+}
+.hot-steam-late {
+  animation-delay: 0.5s;
+}
+@keyframes brew-cup-bob {
+  to {
+    transform: translateY(-4px) rotate(8deg);
+  }
+}
+.brew-seat-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.brew-seat-name strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font: 700 15px / 1.15 var(--round);
+  white-space: nowrap;
+}
+.brew-you {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: #fff;
+  font: 700 9px / 1.2 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-style: normal;
+}
+.brew-seat-name small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: #8d7556;
+  font: 11px / 1.2 var(--mono);
+}
+.brew-sealed-badge {
+  color: var(--pop);
+  font-weight: 700;
+  animation: brew-pulse 0.9s ease-in-out infinite alternate;
+}
+.brew-hearts {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+.brew-seat-score {
+  justify-self: end;
+}
+.brew-cubes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1px;
+  max-width: 92px;
+}
+.brew-score-num {
+  font: 700 26px / 1 var(--serif);
+  white-space: nowrap;
+}
+.brew-score-num small {
+  color: #9b8466;
+  font: 700 11px var(--mono);
+}
+.brew-seat-pop {
+  position: absolute;
+  top: 6px;
+  right: 104px;
+  padding: 3px 9px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff3a8;
+  color: var(--ink);
+  font: 800 13px / 1 var(--round);
+  pointer-events: none;
+  animation: brew-pop-up 1.2s ease-out forwards;
+}
+.brew-seat-pop-bad {
+  background: #ffb8b0;
+}
+@keyframes brew-pop-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+
+.brew-word mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline wavy var(--bg) 1.5px;
+  text-underline-offset: 3px;
+}
+
+/* tea leaves */
+.brew-leaves {
+  transform: rotate(-0.4deg);
+}
+.brew-reading {
+  animation: brew-reading-in 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.brew-reading-title {
+  margin: 0 0 8px;
+  font: 700 17px / 1.25 var(--round);
+}
+.brew-reading-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brew-reading-list li {
+  display: grid;
+  grid-template-columns: minmax(58px, 0.42fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 1.5px dashed #e2d3b8;
+  font-size: 15px;
+}
+.brew-reading-list strong {
+  overflow: hidden;
+  font: 700 13px var(--round);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brew-reading-list li > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 7px;
+  overflow-wrap: anywhere;
+}
+.brew-reading-list small {
+  color: var(--pop);
+  font: 700 11px var(--mono);
+}
+.brew-reading-none {
+  opacity: 0.6;
+}
+.brew-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.brew-delta {
+  padding: 5px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font: 700 12px / 1 var(--round);
+}
+.brew-delta b {
+  margin-left: 5px;
+  color: #2f8a63;
+}
+.brew-delta b.brew-delta-bad {
+  color: #d03e3e;
+}
+@keyframes brew-reading-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(-2deg);
+  }
+}
+
+/* ------------------------------- game over ------------------------------ */
+
+.brew-over {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  overflow: auto;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg-deep) 72%, transparent);
+  backdrop-filter: blur(5px);
+  animation: brew-fade 0.35s ease-out;
+}
+.brew-confetti {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.brew-confetto {
+  position: absolute;
+  top: -50px;
+  width: 24px;
+  animation: brew-confetti linear infinite;
+}
+.brew-confetto .cube-svg,
+.brew-confetto .heart-svg {
+  width: 100%;
+  height: auto;
+}
+@keyframes brew-confetti {
+  from {
+    transform: translateY(-50px) rotate(0deg);
+  }
+  to {
+    transform: translateY(112vh) rotate(calc(var(--spin) * 720deg));
+  }
+}
+.brew-over-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 580px);
+  padding: 28px 26px 22px;
+  border: 3px solid var(--ink);
+  border-radius: 30px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  box-shadow:
+    0 10px 0 var(--ink),
+    0 34px 60px rgb(0 0 0 / 35%);
+  animation: brew-over-in 0.65s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.brew-over-tea {
+  margin: 0 0 4px;
+  color: var(--pop);
+  font-size: 18px;
+}
+.brew-over-card h2 {
+  margin: 2px 0 34px;
+  font: italic 400 clamp(36px, 6vw, 54px) / 1 var(--serif);
+  letter-spacing: -0.02em;
+}
+.brew-podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.brew-podium-spot {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: min(30%, 130px);
+}
+.brew-podium-avatar {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  margin-bottom: 4px;
+}
+.brew-place-1 .brew-podium-avatar {
+  width: 98px;
+  height: 98px;
+  animation: brew-winner 0.9s ease-in-out infinite alternate;
+}
+.brew-crown {
+  position: absolute;
+  z-index: 1;
+  top: -24px;
+  left: 50%;
+  width: 42px;
+  transform: translateX(-50%) rotate(-8deg);
+}
+.brew-podium-spot strong {
+  font: 700 15px / 1.2 var(--round);
+}
+.brew-podium-spot small {
+  color: #8d7556;
+  font: 11px var(--mono);
+}
+.brew-podium-block {
+  display: grid;
+  width: 100%;
+  margin-top: 6px;
+  place-items: center;
+  border: 3px solid var(--ink);
+  border-radius: 14px 14px 4px 4px;
+  background: var(--bg);
+  color: #fff;
+  font: 700 36px / 1 var(--serif);
+  box-shadow: inset 0 -9px 0 rgb(0 0 0 / 18%);
+}
+.brew-place-1 .brew-podium-block {
+  height: 112px;
+}
+.brew-place-2 .brew-podium-block {
+  height: 78px;
+}
+.brew-place-3 .brew-podium-block {
+  height: 54px;
+}
+.brew-over-rest {
+  margin: 0 0 14px;
+  padding: 0;
+  color: #8d7556;
+  font: 12px var(--mono);
+  list-style-position: inside;
+}
+.brew-over-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.brew-btn {
+  padding: 12px 20px;
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: 700 16px / 1 var(--round);
+  box-shadow: 0 4px 0 var(--ink);
+}
+.brew-btn:hover {
+  transform: translateY(-1px) rotate(-1deg);
+}
+.brew-btn:active {
+  box-shadow: 0 1px 0 var(--ink);
+  transform: translateY(3px);
+}
+.brew-btn-primary {
+  background: var(--bg);
+  color: #fff;
+}
+.brew-link {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 13px var(--mono);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.brew-results-fab {
+  position: fixed;
+  z-index: 40;
+  right: 20px;
+  bottom: 20px;
+  padding: 12px 18px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: #fff3a8;
+  color: var(--ink);
+  font: 700 15px / 1 var(--round);
+  box-shadow: 0 4px 0 var(--ink);
+}
+@keyframes brew-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes brew-over-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.85) rotate(-3deg);
+  }
+}
+@keyframes brew-winner {
+  to {
+    transform: translateY(-6px) rotate(3deg);
+  }
+}
+
+/* ------------------------------ responsive ------------------------------ */
+
+@media (max-width: 1020px) {
+  .brew-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brew-side {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+  .brew-stage {
+    width: min(100%, calc(50svh * 660 / 470));
+  }
+}
+
+@media (max-width: 640px) {
+  .brew {
+    padding: 12px 12px 28px;
+  }
+  .brew-top {
+    flex-wrap: wrap;
+  }
+  .brew-heading h2 {
+    font-size: 34px;
+  }
+  .brew-stage {
+    width: 100%;
+  }
+  .brew-note {
+    display: none;
+  }
+  .brew-clock {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    left: 0;
+    display: block;
+    padding: 6px 11px;
+    border: 2.5px solid var(--ink);
+    border-radius: 12px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 700 20px / 1 var(--serif);
+    box-shadow: 0 3px 0 var(--ink);
+    transform: rotate(-4deg);
+  }
+  .brew-clock small {
+    margin-left: 1px;
+    font-size: 12px;
+  }
+  .brew-clock-urgent {
+    background: #ffd0c8;
+    color: #c2262f;
+    animation: brew-tag-panic 0.16s linear infinite;
+  }
+  .brew-bubble {
+    right: 0;
+    bottom: 62%;
+    max-width: 44cqw;
+  }
+  .brew-steep {
+    padding: 0 14px;
+  }
+  .brew-podium-avatar {
+    width: 58px;
+    height: 58px;
+  }
+  .brew-place-1 .brew-podium-avatar {
+    width: 74px;
+    height: 74px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brew *,
+  .brew *::before,
+  .brew *::after,
+  .brew::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to beat every mood animation */
+    animation-duration: 0.001s !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to beat every mood animation */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to beat every mood animation */
+    transition: none !important;
+  }
+  .brew-confetti,
+  .brew-backdrop {
+    display: none;
+  }
+}
