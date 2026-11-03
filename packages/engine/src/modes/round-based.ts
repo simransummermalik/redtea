@@ -317,7 +317,7 @@ function canSubmit<Mode extends RoundModeName, Config extends RoundModeConfig>(
     state.status === "playing" &&
     now < (state.roundEndsAt ?? 0) &&
     Boolean(findPlayer(state, playerId)) &&
-    (state.mode === "green" || !state.submittedPlayerIds.includes(playerId))
+    (state.mode === "green" || state.mode === "red" || !state.submittedPlayerIds.includes(playerId))
   );
 }
 

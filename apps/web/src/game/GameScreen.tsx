@@ -231,11 +231,11 @@ export function GameScreen(props: GameScreenProps) {
     const child = active();
     if (child?.status !== "playing" || finished()) return false;
     if (child.mode === "black") return child.currentPlayerId === props.selfId;
-    return child.mode === "green" || !child.submittedPlayerIds.includes(props.selfId);
+    return child.mode === "green" || child.mode === "red" || !child.submittedPlayerIds.includes(props.selfId);
   };
   const hasSealed = (id: string) => {
     const child = active();
-    if (!child || child.mode === "black" || child.mode === "green" || child.status !== "playing")
+    if (!child || child.mode !== "yellow" || child.status !== "playing")
       return false;
     return child.submittedPlayerIds.includes(id);
   };
@@ -342,8 +342,8 @@ export function GameScreen(props: GameScreenProps) {
             if (word) react("nice", `“${word}” — first to the pot! +1`);
             else react("oops", `“${submission.text}” won't brew. Again!`, 1_300);
           } else if (currentTea === "red") {
-            if (word) react("sealed", `Sealed: ${word.length} letters. Paws crossed!`, 2_400);
-            else react("oops", `“${submission.text}” didn't count. Sit tight…`, 2_200);
+            if (word) react("nice", `${word.length} letters! Keep trying for longer.`, 1_800);
+            else react("oops", `“${submission.text}” didn't count. Try another!`, 1_500);
           } else if (currentTea === "yellow") {
             react("sealed", "Message sealed. Scores spill at the bell!", 2_400);
           }
@@ -581,7 +581,7 @@ export function GameScreen(props: GameScreenProps) {
     if (intermission()) return "The kettle's whistling…";
     if (canSubmit()) return tea() === "yellow" ? "word, word, word…" : "type a word…";
     if (tea() === "black") return "Wait for the hot cup…";
-    return "Sealed — wait for the bell";
+    return tea() === "yellow" ? "Sealed — wait for the bell" : "Wait for the hot cup…";
   };
 
   /* --------------------------- tea leaves ----------------------------- */
