@@ -21,6 +21,7 @@ import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import blackTeaFox from "./assets/black-tea-fox.svg";
 import greenTeaFox from "./assets/green-tea-fox.svg";
+import mixTeaFox from "./assets/mix-tea-fox.svg";
 import redTeaFox from "./assets/red-tea-fox.svg";
 import yellowTeaFox from "./assets/yellow-tea-fox.svg";
 import {
@@ -38,6 +39,7 @@ type TeaMode = GameMode;
 const teaAnimations: Partial<Record<TeaMode, string>> = {
   black: blackTeaFox,
   green: greenTeaFox,
+  mix: mixTeaFox,
   red: redTeaFox,
   yellow: yellowTeaFox,
 };
