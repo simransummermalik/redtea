@@ -31,13 +31,17 @@ describe("processWordLists", () => {
     expect(result.report.samples.singing?.included).toBe(true);
   });
 
-  test("normalizes case, drops non-alpha entries, deduplicates, and indexes each word once", () => {
+  test("normalizes case, drops non-alpha entries, deduplicates, and retains plurals", () => {
     const result = processWordLists(["Tea", "tea", "t-ea", "teas"], [], 1);
 
-    expect(result.words).toEqual(["tea"]);
+    expect(result.words).toEqual(["tea", "teas"]);
     expect(result.report.duplicateEntries).toBe(1);
     expect(result.report.nonAlphaEntriesExcluded).toBe(1);
-    expect(result.fragments).toEqual([{ fragment: "tea", solutionCount: 1, difficulty: "hard" }]);
+    expect(result.report.pluralsRetained).toBe(1);
+    expect(result.fragments).toEqual([
+      { fragment: "eas", solutionCount: 1, difficulty: "hard" },
+      { fragment: "tea", solutionCount: 2, difficulty: "hard" },
+    ]);
   });
 
   test("applies the minimum fragment count and solution-count difficulty tiers", () => {
