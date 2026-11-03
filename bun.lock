@@ -36,7 +36,6 @@
     "packages/protocol": {
       "name": "@redtea/protocol",
       "dependencies": {
-        "@redtea/engine": "workspace:*",
         "zod": "^4.6.7",
       },
     },
