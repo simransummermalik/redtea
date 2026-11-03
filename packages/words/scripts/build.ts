@@ -87,8 +87,8 @@ console.log(`Source entries: ${result.report.sourceEntries}`);
 console.log(`Duplicates: ${result.report.duplicateEntries}`);
 console.log(`Proper-name entries excluded: ${result.report.properNameEntriesExcluded}`);
 console.log(`Non-alpha entries excluded: ${result.report.nonAlphaEntriesExcluded}`);
-console.log(`Plural forms excluded: ${result.report.pluralsExcluded}`);
-console.log(`-ing forms excluded: ${result.report.ingFormsExcluded}`);
+console.log(`Plural forms retained: ${result.report.pluralsRetained}`);
+console.log(`-ing forms retained: ${result.report.ingFormsRetained}`);
 console.log(`Final words: ${result.report.finalWords}`);
 console.log(
   `Fragments below ${dictionaryConfig.minimumSolutions} answers: ${result.report.fragmentsBelowMinimum}`,

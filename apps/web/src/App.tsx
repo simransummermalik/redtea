@@ -464,29 +464,11 @@ export function App() {
       class="page"
       classList={{
         "mode-intro-page": !game() && showModeIntro() && !room(),
+        "party-page": !game() && (!showModeIntro() || Boolean(room())),
         "brew-page": Boolean(game()),
       }}
       data-tea={teaTheme()}
     >
-      <Show when={!game() && (!showModeIntro() || room())}>
-        <header class="topbar">
-          <div class="brand-lockup">
-            <span class="brand-mark" aria-hidden="true">
-              ✳
-            </span>
-            <div>
-              <p class="eyebrow">A word game steeped in speed</p>
-              <h1>Redtea</h1>
-            </div>
-          </div>
-          <div class="theme-strip" role="img" aria-label="Tea mode palettes">
-            <For each={teaModes}>
-              {(tea) => <span class={`theme-dot ${tea.id}`} title={`${tea.label} tea`} />}
-            </For>
-          </div>
-        </header>
-      </Show>
-
       <Show
         when={!game()}
         fallback={
@@ -572,6 +554,13 @@ export function App() {
                 onClick={startGame}
               >
                 Start <span aria-hidden="true">→</span>
+              </button>
+              <button
+                class="multiplayer-intro-button"
+                type="button"
+                onClick={() => setShowModeIntro(false)}
+              >
+                Play with friends
               </button>
             </div>
             <Show when={settingsOpen()}>
@@ -713,83 +702,102 @@ export function App() {
           </section>
         </Show>
         <Show when={!showModeIntro() || room()}>
-          <section class="setup-layout" aria-label="Choose tea mode and game settings">
-            <section class="lobby-card" aria-label="Multiplayer room">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">Play together</p>
-                  <h3>Multiplayer room</h3>
-                </div>
-                <Show when={room()}>
-                  <strong>Code {room()?.room.code}</strong>
-                </Show>
-              </div>
-              <Show
-                when={!room()}
-                fallback={
-                  <div class="lobby-content">
-                    <p>
-                      Share code <strong>{room()?.room.code}</strong> with a friend.
+          <section class="party-screen" aria-label="Play with friends">
+            <button
+              class="party-back-button"
+              type="button"
+              onClick={room() ? leaveRoom : () => setShowModeIntro(true)}
+            >
+              <span aria-hidden="true">←</span> {room() ? "Leave table" : "Back to tea"}
+            </button>
+            <header class="party-heading">
+              <h1>{room() ? "Your table is ready." : "Gather around the table."}</h1>
+              <p>
+                {room()
+                  ? "Invite a friend to join your game."
+                  : "Start a room for your friends, or join one with a code."}
+              </p>
+            </header>
+
+            <Show
+              when={!room()}
+              fallback={
+                <section class="party-lobby" aria-label="Room lobby">
+                  <div class="party-room-code">
+                    <span>ROOM CODE · SHARE WITH FRIENDS</span>
+                    <strong>{room()?.room.code}</strong>
+                  </div>
+                  <Show when={connectionState() === "reconnecting"}>
+                    <p class="party-notice" role="status">
+                      Reconnecting to your room…
                     </p>
-                    <Show when={connectionState() === "reconnecting"}>
-                      <p class="connection-notice" role="status">
-                        Reconnecting… your current input stays on this device.
-                      </p>
-                    </Show>
-                    <Show when={room()?.room.phase === "countdown"}>
-                      <div class="join-countdown" role="status" aria-live="polite">
-                        <strong>
-                          Join window ·{" "}
-                          {Math.max(
-                            0,
-                            Math.ceil(
-                              ((room()?.room.countdownEndsAt ?? clock()) - clock()) / 1_000,
-                            ),
-                          )}
-                          s
-                        </strong>
-                        <p>There’s still time to pull up a seat.</p>
-                      </div>
-                    </Show>
-                    <ul class="lobby-player-list">
-                      <For each={room()?.players ?? []}>
-                        {(player) => (
-                          <li>
-                            {player.name} {player.id === room()?.room.hostId ? "· host" : ""} ·{" "}
-                            {player.connected
-                              ? player.ready
-                                ? "ready"
-                                : "not ready"
-                              : "disconnected"}
-                          </li>
-                        )}
-                      </For>
-                    </ul>
-                    <Show when={connection().playerId() !== room()?.room.hostId}>
-                      <button
-                        class="restart-button"
-                        type="button"
-                        disabled={connectionState() !== "connected"}
-                        onClick={() =>
-                          connection().setReady(
-                            !(
-                              room()?.players.find(
-                                (player) => player.id === connection().playerId(),
-                              )?.ready ?? false
-                            ),
-                          )
-                        }
-                      >
-                        {room()?.players.find((player) => player.id === connection().playerId())
-                          ?.ready
-                          ? "Not ready"
-                          : "Ready"}
-                      </button>
-                    </Show>
-                    <Show when={connection().playerId() === room()?.room.hostId}>
-                      <div class="lobby-controls">
+                  </Show>
+                  <Show when={room()?.room.phase === "countdown"}>
+                    <div class="party-countdown" role="status" aria-live="polite">
+                      <strong>
+                        Starting in{" "}
+                        {Math.max(
+                          0,
+                          Math.ceil(((room()?.room.countdownEndsAt ?? clock()) - clock()) / 1_000),
+                        )}{" "}
+                        seconds
+                      </strong>
+                      <span>There’s still time to pull up a seat.</span>
+                    </div>
+                  </Show>
+                  <div class="party-seats-heading">
+                    <span>At the table</span>
+                    <small>{room()?.players.length ?? 0} seats</small>
+                  </div>
+                  <ul class="party-seats">
+                    <For each={room()?.players ?? []}>
+                      {(player) => (
+                        <li classList={{ "party-seat-disconnected": !player.connected }}>
+                          <span class="party-seat-mark" aria-hidden="true">
+                            ✳
+                          </span>
+                          <span class="party-seat-name">
+                            {player.name}
+                            <Show when={player.id === room()?.room.hostId}>
+                              <small>HOST</small>
+                            </Show>
+                          </span>
+                          <span class="party-seat-status">
+                            {!player.connected ? "Away" : player.ready ? "Ready" : "At the table"}
+                          </span>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+
+                  <Show when={connection().playerId() !== room()?.room.hostId}>
+                    <button
+                      class="party-primary-button"
+                      type="button"
+                      disabled={connectionState() !== "connected"}
+                      onClick={() =>
+                        connection().setReady(
+                          !(
+                            room()?.players.find((player) => player.id === connection().playerId())
+                              ?.ready ?? false
+                          ),
+                        )
+                      }
+                    >
+                      {room()?.players.find((player) => player.id === connection().playerId())
+                        ?.ready
+                        ? "I’m ready · change"
+                        : "I’m ready"}
+                    </button>
+                  </Show>
+                  <Show when={connection().playerId() === room()?.room.hostId}>
+                    <details class="party-options">
+                      <summary>
+                        Table settings <span>Change tea, bots and round length</span>
+                      </summary>
+                      <div class="party-options-grid">
                         <label>
-                          Mode{" "}
+                          Tea
                           <select
                             value={room()?.room.mode}
                             disabled={connectionState() !== "connected"}
@@ -800,12 +808,12 @@ export function App() {
                             }}
                           >
                             <For each={teaModes}>
-                              {(tea) => <option value={tea.id}>{tea.label}</option>}
+                              {(tea) => <option value={tea.id}>{tea.label} Tea</option>}
                             </For>
                           </select>
                         </label>
                         <label>
-                          Bot seats{" "}
+                          Bot seats
                           <select
                             value={room()?.room.botCount}
                             disabled={connectionState() !== "connected"}
@@ -835,7 +843,7 @@ export function App() {
                           }
                         >
                           <label>
-                            Points to win{" "}
+                            Points to win
                             <input
                               type="number"
                               disabled={connectionState() !== "connected"}
@@ -854,7 +862,7 @@ export function App() {
                         </Show>
                         <Show when={(room()?.room.mode ?? mode()) !== "mix"}>
                           <label>
-                            Seconds per turn/round{" "}
+                            Seconds per turn / round
                             <input
                               type="number"
                               disabled={connectionState() !== "connected"}
@@ -874,107 +882,101 @@ export function App() {
                             />
                           </label>
                         </Show>
-                        <Show
-                          when={
-                            (room()?.room.mode ?? mode()) === "mix" &&
-                            (room()?.players.filter(
-                              (player) => player.connected && player.kind === "human",
-                            ).length ?? 0) +
-                              (room()?.room.botCount ?? 0) <
-                              2
-                          }
-                        >
-                          <p class="feedback" role="status">
-                            Mix needs at least two connected players or bots. Add a player or a bot
-                            before starting.
-                          </p>
-                        </Show>
-                        <button
-                          class="submit-button"
-                          type="button"
-                          onClick={() => connection().startRoom()}
-                          disabled={
-                            room()?.room.phase === "countdown" ||
-                            connectionState() !== "connected" ||
-                            ((room()?.room.mode ?? mode()) === "mix" &&
-                              (room()?.players.filter(
-                                (player) => player.connected && player.kind === "human",
-                              ).length ?? 0) +
-                                (room()?.room.botCount ?? 0) <
-                                2)
-                          }
-                        >
-                          {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game"}
-                        </button>
                       </div>
+                    </details>
+                    <Show
+                      when={
+                        (room()?.room.mode ?? mode()) === "mix" &&
+                        (room()?.players.filter(
+                          (player) => player.connected && player.kind === "human",
+                        ).length ?? 0) +
+                          (room()?.room.botCount ?? 0) <
+                          2
+                      }
+                    >
+                      <p class="party-notice" role="status">
+                        Mix needs at least two connected players or bots. Add a player or a bot
+                        before starting.
+                      </p>
                     </Show>
-                    <button class="restart-button" type="button" onClick={leaveRoom}>
-                      Leave room
+                    <button
+                      class="party-primary-button"
+                      type="button"
+                      onClick={() => connection().startRoom()}
+                      disabled={
+                        room()?.room.phase === "countdown" ||
+                        connectionState() !== "connected" ||
+                        ((room()?.room.mode ?? mode()) === "mix" &&
+                          (room()?.players.filter(
+                            (player) => player.connected && player.kind === "human",
+                          ).length ?? 0) +
+                            (room()?.room.botCount ?? 0) <
+                            2)
+                      }
+                    >
+                      {room()?.room.phase === "countdown" ? "Starting soon…" : "Start game →"}
                     </button>
-                  </div>
-                }
-              >
-                <div class="lobby-content">
-                  <Show when={connectionState() === "reconnecting"}>
-                    <p class="connection-notice" role="status">
-                      Reconnecting to your room…
+                  </Show>
+                  <Show when={lobbyError()}>
+                    <p class="party-error" role="alert">
+                      {lobbyError()}
                     </p>
                   </Show>
-                  <label class="setting-control">
-                    <span>
-                      <strong>Your name</strong>
-                    </span>
-                    <input
-                      value={name()}
-                      maxlength="24"
-                      onInput={(event) => setName(event.currentTarget.value)}
-                    />
-                  </label>
-                  <div class="lobby-controls">
-                    <button
-                      class="submit-button"
-                      type="button"
-                      disabled={connectionState() !== "connected"}
-                      onClick={() => startRoomConnection(true)}
-                    >
-                      Create room
-                    </button>
+                </section>
+              }
+            >
+              <section class="party-entry" aria-label="Create or join a room">
+                <label class="party-name-field">
+                  Your name
+                  <input
+                    value={name()}
+                    maxlength="24"
+                    onInput={(event) => setName(event.currentTarget.value)}
+                  />
+                </label>
+                <button
+                  class="party-primary-button"
+                  type="button"
+                  disabled={connectionState() !== "connected"}
+                  onClick={() => startRoomConnection(true)}
+                >
+                  Create a room <span>→</span>
+                </button>
+                <div class="party-join-row">
+                  <label>
+                    Have a room code?
                     <input
                       aria-label="Room code"
                       disabled={connectionState() !== "connected"}
-                      placeholder="Room code"
+                      placeholder="ABCDE"
                       maxlength="5"
                       value={roomCodeEntry()}
                       onInput={(event) => setRoomCodeEntry(event.currentTarget.value.toUpperCase())}
                     />
-                    <button
-                      class="restart-button"
-                      type="button"
-                      disabled={roomCodeEntry().length !== 5 || connectionState() !== "connected"}
-                      onClick={() => startRoomConnection(false)}
-                    >
-                      Join
-                    </button>
-                  </div>
+                  </label>
+                  <button
+                    class="party-secondary-button"
+                    type="button"
+                    disabled={roomCodeEntry().length !== 5 || connectionState() !== "connected"}
+                    onClick={() => startRoomConnection(false)}
+                  >
+                    Join
+                  </button>
                 </div>
-              </Show>
-              <Show when={lobbyError()}>
-                <p class="feedback" role="alert">
-                  {lobbyError()}
-                </p>
-              </Show>
-            </section>
+                <Show when={connectionState() === "reconnecting"}>
+                  <p class="party-notice" role="status">
+                    Reconnecting to your room…
+                  </p>
+                </Show>
+                <Show when={lobbyError()}>
+                  <p class="party-error" role="alert">
+                    {lobbyError()}
+                  </p>
+                </Show>
+              </section>
+            </Show>
           </section>
         </Show>
-      </Show>
-
-      <Show when={!game() && (!showModeIntro() || room())}>
-        <footer class="footer">
-          <span>BREWED FOR WORD LOVERS</span>
-          <span>
-            One fragment at a time <i>✳</i>
-          </span>
-        </footer>
       </Show>
     </main>
   );

@@ -3,39 +3,39 @@
   "duplicateEntries": 0,
   "properNameEntriesExcluded": 20246,
   "nonAlphaEntriesExcluded": 24265,
-  "pluralsExcluded": 20666,
-  "ingFormsExcluded": 6948,
-  "finalWords": 49489,
-  "fragmentsBelowMinimum": 1959,
+  "pluralsRetained": 20666,
+  "ingFormsRetained": 6948,
+  "finalWords": 77103,
+  "fragmentsBelowMinimum": 1512,
   "fragmentsByDifficulty": {
-    "easy": 837,
-    "medium": 1330,
-    "hard": 1807
+    "easy": 1267,
+    "medium": 1379,
+    "hard": 1851
   },
   "samples": {
     "bus": {
       "included": true,
-      "reason": "retained as a base word"
+      "reason": "retained as a word"
     },
     "sing": {
       "included": true,
-      "reason": "retained as a base word"
+      "reason": "retained as a word"
     },
     "news": {
       "included": true,
-      "reason": "retained as a base word"
+      "reason": "retained as a word"
     },
     "series": {
       "included": true,
-      "reason": "retained as a base word"
+      "reason": "retained as a word"
     },
     "buses": {
-      "included": false,
-      "reason": "excluded because a singular stem is present"
+      "included": true,
+      "reason": "retained as a plural form"
     },
     "singing": {
-      "included": false,
-      "reason": "excluded because its verb stem is present"
+      "included": true,
+      "reason": "retained as an -ing form"
     }
   }
 }
