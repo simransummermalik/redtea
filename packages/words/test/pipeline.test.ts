@@ -2,21 +2,33 @@ import { describe, expect, test } from "bun:test";
 import { processWordLists } from "../src/pipeline";
 
 describe("processWordLists", () => {
-  test("removes inflections only when a stem is present and preserves edge cases", () => {
+  test("retains plurals and -ing forms when a stem is present", () => {
     const result = processWordLists(
       ["bus", "buses", "sing", "singing", "new", "news", "series", "dog", "dogs"],
       ["Alice", "London"],
       1,
     );
 
-    expect(result.words).toEqual(["bus", "dog", "new", "news", "series", "sing"]);
-    expect(result.report.pluralsExcluded).toBe(2);
-    expect(result.report.ingFormsExcluded).toBe(1);
+    expect(result.words).toEqual([
+      "bus",
+      "buses",
+      "dog",
+      "dogs",
+      "new",
+      "news",
+      "series",
+      "sing",
+      "singing",
+    ]);
+    expect(result.report.pluralsRetained).toBe(2);
+    expect(result.report.ingFormsRetained).toBe(1);
     expect(result.report.properNameEntriesExcluded).toBe(2);
     expect(result.report.samples.bus?.included).toBe(true);
     expect(result.report.samples.sing?.included).toBe(true);
     expect(result.report.samples.news?.included).toBe(true);
     expect(result.report.samples.series?.included).toBe(true);
+    expect(result.report.samples.buses?.included).toBe(true);
+    expect(result.report.samples.singing?.included).toBe(true);
   });
 
   test("normalizes case, drops non-alpha entries, deduplicates, and indexes each word once", () => {
