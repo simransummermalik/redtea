@@ -18,10 +18,15 @@ import {
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import babyFoxPortrait from "./assets/fox-face-portrait-baby.svg";
 import blackTeaFox from "./assets/black-tea-fox.svg";
+import foxesThree from "./assets/foxes-three.svg";
+import foxesTwo from "./assets/foxes-two.svg";
+import middleAgedFoxPortrait from "./assets/fox-face-portrait-middle-aged.svg";
 import nervousFoxPortrait from "./assets/fox-face-portrait-nervous.svg";
 import foxFacePortrait from "./assets/fox-face-portrait-static.svg";
 import scaredFoxPortrait from "./assets/fox-face-portrait-scared.svg";
+import veryOldFoxPortrait from "./assets/fox-face-portrait-very-old.svg";
 import greenTeaFox from "./assets/green-tea-fox.svg";
 import mixTeaFox from "./assets/mix-tea-fox.svg";
 import redTeaFox from "./assets/red-tea-fox.svg";
@@ -243,6 +248,22 @@ export function App() {
     const skill = config().botSkill;
     if (skill >= 0.75) return scaredFoxPortrait;
     if (skill >= 0.4) return nervousFoxPortrait;
+    return foxFacePortrait;
+  };
+  const timeSeconds = () =>
+    (mode() === "mix"
+      ? (config().mixConfig?.roundTimeMs ?? config().roundTimeMs)
+      : config().roundTimeMs) / 1_000;
+  const timeFox = () => {
+    const seconds = timeSeconds();
+    if (seconds >= 75) return veryOldFoxPortrait;
+    if (seconds >= 45) return middleAgedFoxPortrait;
+    if (seconds >= 20) return foxFacePortrait;
+    return babyFoxPortrait;
+  };
+  const botCountFox = () => {
+    if (config().botCount >= 3) return foxesThree;
+    if (config().botCount >= 2) return foxesTwo;
     return foxFacePortrait;
   };
 
@@ -1012,40 +1033,9 @@ export function App() {
                   <div class="settings-popover-list">
                     <label class="settings-slider-row">
                       <span class="settings-range-heading">
-                        <span>Tea</span>
-                        <output>
-                          {teaModes.find((tea) => tea.id === mode())?.label ?? "Red"} Tea
-                        </output>
-                      </span>
-                      <input
-                        class="settings-range"
-                        aria-label="Tea"
-                        type="range"
-                        min="0"
-                        max={teaModes.length - 1}
-                        step="1"
-                        value={Math.max(
-                          0,
-                          teaModes.findIndex((tea) => tea.id === mode()),
-                        )}
-                        style={"--range-fox: url(" + foxFacePortrait + ")"}
-                        onInput={(event) => {
-                          const tea = teaModes[Number(event.currentTarget.value)];
-                          if (tea) setMode(tea.id);
-                        }}
-                      />
-                    </label>
-                    <label class="settings-slider-row">
-                      <span class="settings-range-heading">
                         <span>Time</span>
-                        <output>
-                          {Math.round(
-                            (mode() === "mix"
-                              ? (config().mixConfig?.roundTimeMs ?? config().roundTimeMs)
-                              : config().roundTimeMs) / 1_000,
-                          )}{" "}
-                          sec
-                        </output>
+                        <img src={timeFox()} alt="" aria-hidden="true" />
+                        <output>{Math.round(timeSeconds())} sec</output>
                       </span>
                       <input
                         class="settings-range"
@@ -1054,18 +1044,15 @@ export function App() {
                         min={mode() === "black" ? 5 : 1}
                         max="120"
                         step="1"
-                        value={
-                          mode() === "mix"
-                            ? (config().mixConfig?.roundTimeMs ?? config().roundTimeMs) / 1_000
-                            : config().roundTimeMs / 1_000
-                        }
-                        style={"--range-fox: url(" + foxFacePortrait + ")"}
+                        value={timeSeconds()}
+                        style={"--range-fox: url(" + timeFox() + ")"}
                         onInput={(event) => updateRoundTime(Number(event.currentTarget.value))}
                       />
                     </label>
                     <label class="settings-slider-row">
                       <span class="settings-range-heading">
                         <span>Bots</span>
+                        <img src={botCountFox()} alt="" aria-hidden="true" />
                         <output>{config().botCount}</output>
                       </span>
                       <input
@@ -1076,7 +1063,7 @@ export function App() {
                         max="3"
                         step="1"
                         value={config().botCount}
-                        style={"--range-fox: url(" + foxFacePortrait + ")"}
+                        style={"--range-fox: url(" + botCountFox() + ")"}
                         onInput={(event) =>
                           updateConfig("botCount", Number(event.currentTarget.value))
                         }
@@ -1103,65 +1090,46 @@ export function App() {
                       />
                     </label>
                     <Show when={mode() !== "black"}>
-                      <label class="settings-slider-row">
-                        <span class="settings-range-heading">
-                          <span>Points to win</span>
-                          <output>
-                            {mode() === "mix"
-                              ? (config().mixConfig?.pointsToWin ?? defaultMixConfig.pointsToWin)
-                              : config().pointsToWin}
-                          </output>
-                        </span>
+                      <label class="settings-row">
+                        <span>Points to win</span>
                         <input
-                          class="settings-range"
+                          class="settings-number"
                           aria-label="Points to win"
-                          type="range"
+                          type="number"
                           min="1"
                           max="99"
-                          step="1"
                           value={
                             mode() === "mix"
                               ? (config().mixConfig?.pointsToWin ?? defaultMixConfig.pointsToWin)
                               : config().pointsToWin
                           }
-                          style={"--range-fox: url(" + foxFacePortrait + ")"}
                           onInput={(event) => updatePointsTarget(Number(event.currentTarget.value))}
                         />
                       </label>
                     </Show>
                     <Show when={mode() === "red" || mode() === "yellow" || mode() === "mix"}>
-                      <label class="settings-slider-row">
-                        <span class="settings-range-heading">
-                          <span>Allow word reuse</span>
-                          <output>
-                            {(
-                              mode() === "mix"
-                                ? (config().mixConfig?.reuseWordsPerTea ?? false)
-                                : config().allowWordReuse
-                            )
-                              ? "On"
-                              : "Off"}
-                          </output>
+                      <label class="settings-toggle-row">
+                        <span>Allow word reuse</span>
+                        <span class="settings-toggle-value">
+                          {(
+                            mode() === "mix"
+                              ? (config().mixConfig?.reuseWordsPerTea ?? false)
+                              : config().allowWordReuse
+                          )
+                            ? "Yes"
+                            : "No"}
                         </span>
                         <input
-                          class="settings-range"
+                          class="settings-toggle"
                           aria-label="Allow word reuse"
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="1"
-                          value={
+                          type="checkbox"
+                          checked={
                             mode() === "mix"
-                              ? config().mixConfig?.reuseWordsPerTea
-                                ? 1
-                                : 0
+                              ? (config().mixConfig?.reuseWordsPerTea ?? false)
                               : config().allowWordReuse
-                                ? 1
-                                : 0
                           }
-                          style={"--range-fox: url(" + foxFacePortrait + ")"}
-                          onInput={(event) => {
-                            const allowReuse = Number(event.currentTarget.value) === 1;
+                          onChange={(event) => {
+                            const allowReuse = event.currentTarget.checked;
                             if (mode() === "mix") changeMixSetting("reuseWordsPerTea", allowReuse);
                             else updateConfig("allowWordReuse", allowReuse);
                           }}

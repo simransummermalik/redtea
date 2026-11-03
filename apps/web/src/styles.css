@@ -1669,7 +1669,8 @@ select:focus-visible {
 .settings-slider-row,
 .settings-row,
 .settings-range-heading,
-.settings-check-row {
+.settings-check-row,
+.settings-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1710,7 +1711,8 @@ select:focus-visible {
 }
 
 .settings-slider-row,
-.settings-check-row {
+.settings-check-row,
+.settings-toggle-row {
   min-height: 45px;
   gap: 16px;
   border-bottom: 1px solid rgb(255 255 255 / 32%);
@@ -1794,8 +1796,8 @@ select:focus-visible {
   width: 37px;
   height: 31px;
   appearance: none;
-  border: 1px solid rgb(255 255 255 / 90%);
-  border-radius: 4px;
+  border: 0;
+  border-radius: 0;
   background: transparent var(--range-fox) center / 64px 44px no-repeat;
   cursor: grab;
 }
@@ -1803,8 +1805,8 @@ select:focus-visible {
 .settings-range::-moz-range-thumb {
   width: 37px;
   height: 31px;
-  border: 1px solid rgb(255 255 255 / 90%);
-  border-radius: 4px;
+  border: 0;
+  border-radius: 0;
   background: transparent var(--range-fox) center / 64px 44px no-repeat;
   cursor: grab;
 }
@@ -1818,6 +1820,50 @@ select:focus-visible {
   height: 18px;
   margin: 0;
   accent-color: #fff;
+}
+
+.settings-toggle-row > span:first-child {
+  flex: 1;
+}
+
+.settings-toggle-value {
+  min-width: 27px;
+  font-size: 14px;
+  text-align: right;
+}
+
+.settings-toggle {
+  position: relative;
+  width: 42px;
+  height: 23px;
+  flex: 0 0 42px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+  cursor: pointer;
+}
+
+.settings-toggle::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  content: "";
+  transition: transform 0.15s ease;
+}
+
+.settings-toggle:checked {
+  background: rgb(255 255 255 / 84%);
+}
+
+.settings-toggle:checked::before {
+  background: var(--intro-popup);
+  transform: translateX(19px);
 }
 
 .settings-done-button {

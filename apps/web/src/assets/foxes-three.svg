@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="680" height="470" viewBox="0 0 680 470" role="img">
+<title>Three foxes squashed together</title>
+<desc>Three identical cartoon foxes with teal scarves squeezed cheek to cheek in a row, the middle one in front and the outer two tilted inward, with autumn leaves around them, in the same size frame as the single fox portrait.</desc>
+<defs>
+<g id="fox">
+<path d="M340 245 C300 245, 270 280, 262 330 C254 380, 270 412, 340 412 C410 412, 426 380, 418 330 C410 280, 380 245, 340 245 Z" fill="#ef8a45" stroke="#4a2a24" stroke-width="3.5"/>
+<path d="M340 262 C312 262, 296 300, 296 340 C296 385, 316 404, 340 404 C364 404, 384 385, 384 340 C384 300, 368 262, 340 262 Z" fill="#fff2e0"/>
+<path d="M252 238 C286 262, 394 262, 428 238 L434 256 C398 290, 282 290, 246 256 Z" fill="#3f8a83" stroke="#4a2a24" stroke-width="3" stroke-linejoin="round"/>
+<path d="M262 248 L260 264 M274 252 L272 270 M290 256 L289 276 M306 259 L305 280 M322 260 L322 282 M340 261 L340 283 M358 260 L358 282 M374 259 L375 280 M390 256 L391 276 M406 252 L408 270 M418 248 L420 264" fill="none" stroke="#2f6b65" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M258 140 C244 104, 232 62, 236 40 C262 46, 300 70, 322 100 Z" fill="#ef8a45"/>
+<path d="M266 128 C256 100, 248 72, 248 58 C268 66, 292 86, 306 104 Z" fill="#fff2e0"/>
+<path d="M236 40 C262 46, 270 52, 276 58 Q256 60, 237 68 C236 58, 235 50, 236 40 Z" fill="#5a3222"/>
+<path d="M258 140 C244 104, 232 62, 236 40 C262 46, 300 70, 322 100" fill="none" stroke="#4a2a24" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M422 140 C436 104, 448 62, 444 40 C418 46, 380 70, 358 100 Z" fill="#ef8a45"/>
+<path d="M414 128 C424 100, 432 72, 432 58 C412 66, 388 86, 374 104 Z" fill="#fff2e0"/>
+<path d="M444 40 C418 46, 410 52, 404 58 Q424 60, 443 68 C444 58, 445 50, 444 40 Z" fill="#5a3222"/>
+<path d="M422 140 C436 104, 448 62, 444 40 C418 46, 380 70, 358 100" fill="none" stroke="#4a2a24" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M324 98 Q330 80 340 93 Q350 78 358 98 Z" fill="#ef8a45" stroke="#4a2a24" stroke-width="3" stroke-linejoin="round"/>
+<path d="M340 92 C400 92, 440 128, 442 172 C444 196, 438 210, 456 222 C442 226, 448 236, 434 240 C420 248, 380 252, 340 252 C300 252, 260 248, 246 240 C232 236, 238 226, 224 222 C242 210, 236 196, 238 172 C240 128, 280 92, 340 92 Z" fill="#ef8a45"/>
+<path d="M239 190 Q268 214, 300 206 C318 200, 326 186, 340 186 C354 186, 362 200, 380 206 Q412 214, 441 190 C442 200, 440 212, 456 222 C442 226, 448 236, 434 240 C420 248, 380 252, 340 252 C300 252, 260 248, 246 240 C232 236, 238 226, 224 222 C240 212, 238 200, 239 190 Z" fill="#fff2e0"/>
+<path d="M340 92 C400 92, 440 128, 442 172 C444 196, 438 210, 456 222 C442 226, 448 236, 434 240 C420 248, 380 252, 340 252 C300 252, 260 248, 246 240 C232 236, 238 226, 224 222 C242 210, 236 196, 238 172 C240 128, 280 92, 340 92 Z" fill="none" stroke="#4a2a24" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M324 112 Q328 120 332 124 M356 112 Q352 120 348 124" fill="none" stroke="#d66a33" stroke-width="3" stroke-linecap="round"/>
+<ellipse cx="292" cy="180" rx="21" ry="25" fill="#2b1714"/>
+<ellipse cx="388" cy="180" rx="21" ry="25" fill="#2b1714"/>
+<ellipse cx="292" cy="192" rx="14" ry="10" fill="#6b3420"/>
+<ellipse cx="388" cy="192" rx="14" ry="10" fill="#6b3420"/>
+<path d="M280 197 Q292 205 304 197 M376 197 Q388 205 400 197" fill="none" stroke="#c8743a" stroke-width="3" stroke-linecap="round"/>
+<circle cx="284" cy="170" r="8" fill="#ffffff"/>
+<circle cx="380" cy="170" r="8" fill="#ffffff"/>
+<circle cx="300" cy="190" r="3.5" fill="#ffffff"/>
+<circle cx="396" cy="190" r="3.5" fill="#ffffff"/>
+<circle cx="296" cy="165" r="2" fill="#ffffff"/>
+<circle cx="392" cy="165" r="2" fill="#ffffff"/>
+<path d="M274 167 L265 160 M406 167 L415 160" fill="none" stroke="#4a2a24" stroke-width="3" stroke-linecap="round"/>
+<ellipse cx="262" cy="214" rx="15" ry="8" fill="#f4985e" opacity="0.6"/>
+<path d="M255 217 L258 211 M261 217 L264 211 M267 217 L270 211" fill="none" stroke="#e0773f" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+<ellipse cx="418" cy="214" rx="15" ry="8" fill="#f4985e" opacity="0.6"/>
+<path d="M411 217 L414 211 M417 217 L420 211 M423 217 L426 211" fill="none" stroke="#e0773f" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+<path d="M330 210 Q340 206 350 210 Q349 220 340 223 Q331 220 330 210 Z" fill="#2b1714"/>
+<ellipse cx="336" cy="211" rx="3" ry="1.6" fill="#ffffff"/>
+<path d="M340 223 L340 229 M331 229 Q335.5 235 340 229 Q344.5 235 349 229" fill="none" stroke="#4a2a24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="318" cy="224" r="1.6" fill="#c98b6a"/>
+<circle cx="313" cy="230" r="1.6" fill="#c98b6a"/>
+<circle cx="321" cy="231" r="1.6" fill="#c98b6a"/>
+<circle cx="362" cy="224" r="1.6" fill="#c98b6a"/>
+<circle cx="367" cy="230" r="1.6" fill="#c98b6a"/>
+<circle cx="359" cy="231" r="1.6" fill="#c98b6a"/>
+</g>
+<g id="leaf"><path d="M0 -14 C10 -7, 10 7, 0 14 C-10 7, -10 -7, 0 -14 Z" stroke="#4a2a24" stroke-width="2"/><path d="M0 -11 L0 17" fill="none" stroke="#4a2a24" stroke-width="1.5" stroke-linecap="round"/></g>
+</defs>
+<use href="#leaf" xlink:href="#leaf" fill="#e0703a" transform="translate(60 70) rotate(25)"/>
+<use href="#leaf" xlink:href="#leaf" fill="#e8a93b" transform="translate(200 45) rotate(-20)"/>
+<use href="#leaf" xlink:href="#leaf" fill="#c9472f" transform="translate(340 40) rotate(10)"/>
+<use href="#leaf" xlink:href="#leaf" fill="#e8a93b" transform="translate(480 45) rotate(30)"/>
+<use href="#leaf" xlink:href="#leaf" fill="#e0703a" transform="translate(620 70) rotate(-35)"/>
+<use href="#fox" xlink:href="#fox" transform="translate(124 238) rotate(6) scale(1.03) translate(-340 -146)"/>
+<use href="#fox" xlink:href="#fox" transform="translate(556 238) rotate(-6) scale(1.03) translate(-340 -146)"/>
+<use href="#fox" xlink:href="#fox" transform="translate(340 226) scale(1.03) translate(-340 -146)"/>
+</svg>
+
