@@ -37,7 +37,7 @@ svg .head,svg .eo,svg .blush,svg .earR,svg .breath,svg .spin{transform-box:fill-
 @keyframes fall{0%{opacity:0;transform:translateY(-40px)}10%,85%{opacity:1}100%{opacity:0;transform:translateY(500px)}}
 @keyframes sway{0%{transform:translateX(-22px)}100%{transform:translateX(22px)}}
 @keyframes spin{0%{transform:rotate(-30deg)}100%{transform:rotate(30deg)}}
-@media (prefers-reduced-motion:reduce){svg.play *{animation:none}}
+@media (prefers-reduced-motion:reduce){svg.play [class]{animation:none}}
 </style>
 <title>Fox sipping red tea</title><desc>A chibi fox with big glossy eyes and a teal knit scarf sits on a cream cushion with its tail wrapped around its feet, holding a white teacup of red tea in both paws and slowly sipping it.</desc>
 <defs><clipPath id="cupclip"><path d="M200 170 C200 300, 240 380, 340 380 C440 380, 480 300, 480 170 Z"></path></clipPath></defs>

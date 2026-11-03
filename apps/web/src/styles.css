@@ -1465,7 +1465,7 @@ select:focus-visible {
 
 .mode-selector select {
   display: block;
-  width: min(76vw, 300px);
+  width: min(86vw, 350px);
   padding: 6px 30px;
   border: 0;
   border-radius: 2px;
@@ -1505,11 +1505,14 @@ select:focus-visible {
   place-items: center;
 }
 
-.mode-intro-page[data-tea="red"] .mode-intro-art {
+.mode-intro-page[data-tea="red"] .mode-intro-art,
+.mode-intro-page[data-tea="black"] .mode-intro-art,
+.mode-intro-page[data-tea="green"] .mode-intro-art,
+.mode-intro-page[data-tea="yellow"] .mode-intro-art {
   aspect-ratio: 680 / 490;
 }
 
-.red-tea-fox {
+.tea-fox {
   display: block;
   width: 100%;
   height: auto;
@@ -1570,4 +1573,3 @@ select:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 5px;
 }
-

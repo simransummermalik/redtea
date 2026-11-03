@@ -19,7 +19,10 @@ import {
 } from "@redtea/engine";
 import { clientMessageSchema } from "@redtea/protocol";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import blackTeaFox from "./assets/black-tea-fox.svg";
+import greenTeaFox from "./assets/green-tea-fox.svg";
 import redTeaFox from "./assets/red-tea-fox.svg";
+import yellowTeaFox from "./assets/yellow-tea-fox.svg";
 import {
   type AnyGameState,
   type GameConnection,
@@ -32,6 +35,13 @@ import { loadWordCatalog } from "./gameData";
 import "./styles.css";
 
 type TeaMode = GameMode;
+const teaAnimations: Partial<Record<TeaMode, string>> = {
+  black: blackTeaFox,
+  green: greenTeaFox,
+  red: redTeaFox,
+  yellow: yellowTeaFox,
+};
+
 type UiModeConfig = {
   botCount: number;
   botSkill: number;
@@ -921,20 +931,22 @@ export function App() {
               </h1>
               <div class="mode-intro-art" aria-hidden="true">
                 <Show
-                  when={mode() === "red"}
+                  when={teaAnimations[mode()]}
                   fallback={
                     <div class={`mode-art-symbol ${mode()}`}>
                       {teaModes.find((tea) => tea.id === mode())?.glyph}
                     </div>
                   }
                 >
-                  <img
-                    class="red-tea-fox"
-                    src={redTeaFox}
-                    width="680"
-                    height="490"
-                    alt="A fox sitting and sipping red tea"
-                  />
+                  {(animation) => (
+                    <img
+                      class="tea-fox"
+                      src={animation()}
+                      width="680"
+                      height="490"
+                      alt={`A fox sitting and sipping ${mode()} tea`}
+                    />
+                  )}
                 </Show>
               </div>
               <section class="how-it-works-card">
